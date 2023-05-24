@@ -1,0 +1,78 @@
+{
+  "name": "rectangle_1",
+  "version": 32,
+  "source-key": {
+    "type": "figma",
+    "file": "0PWxJcWQxUu8ESG9Ay5RXX",
+    "node": "1:3",
+    "version": "3542956679",
+    "component-id": "5d1bc66c21ad88fc5bc282a5dd679a11ab7e6204"
+  },
+  "default": "Rectangle 1",
+  "design": {
+    "atoms": [
+      {
+        "type": "group",
+        "id": "top_level",
+        "root": "true"
+      },
+      {
+        "type": "vector",
+        "id": "Rectangle 1"
+      }
+    ],
+    "modes": {
+      "Rectangle 1": {
+        "rules": [
+          {
+            "id": "top_level",
+            "is-structured": "false",
+            "children": [
+              "Rectangle 1"
+            ],
+            "clip-content": "false"
+          },
+          {
+            "id": "Rectangle 1",
+            "drop-shadow": {
+              "color": {
+                "alpha": "0.24705882352941178",
+                "hue": "0.0",
+                "saturation": "0.0",
+                "value": "0.0"
+              },
+              "blur": "4.0",
+              "offset-x": "0.0",
+              "offset-y": "4.0",
+              "spread": "0.0",
+              "blend-mode": "normal"
+            },
+            "size-constraints": {
+              "width-constraints": {
+                "sizing-mode": "proportional",
+                "value": "1.0"
+              },
+              "height-constraints": {
+                "sizing-mode": "proportional",
+                "value": "1.0"
+              }
+            },
+            "vector-content": "rectangle_1.svg"
+          }
+        ]
+      }
+    }
+  },
+  "previews": [
+    {
+      "design": "Rectangle 1",
+      "size": {
+        "width": 254.0,
+        "height": 112.0
+      }
+    }
+  ],
+  "adin-component-search-paths": [],
+  "image-search-paths": [],
+  "vector-search-paths": []
+}
