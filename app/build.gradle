@@ -1,7 +1,7 @@
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
-
+    id 'kotlin-kapt'
 }
 
 android {
@@ -42,6 +42,13 @@ android {
 }
 
 dependencies {
+    def room_version = "2.5.1"
+
+    implementation "androidx.room:room-runtime:$room_version"
+    kapt "androidx.room:room-compiler:$room_version"
+    // optional - Paging 3 Integration
+    implementation "androidx.room:room-paging:$room_version"
+
     // navigation组件安装
     def nav_version = "2.5.3"
     // Kotlin
@@ -61,6 +68,8 @@ dependencies {
     implementation 'androidx.compose.material3:material3'
     implementation "androidx.constraintlayout:constraintlayout-compose:1.0.1"
     implementation 'androidx.compose.ui:ui'
+    // Optional - Add full set of material icons
+    implementation 'androidx.compose.material:material-icons-extended'
 
     // Android Studio Preview support
     implementation 'androidx.compose.ui:ui-tooling-preview'

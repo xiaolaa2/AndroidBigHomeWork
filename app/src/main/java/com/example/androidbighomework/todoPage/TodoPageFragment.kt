@@ -1,11 +1,13 @@
 package com.example.androidbighomework.todoPage
 
-import android.database.sqlite.SQLiteDatabase
+import android.annotation.SuppressLint
+import android.content.Context
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -14,6 +16,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -27,15 +30,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.constraintlayout.compose.ConstraintLayout
 import androidx.fragment.app.Fragment
+import com.example.androidbighomework.MyApplication
 import com.example.androidbighomework.R
-import com.example.androidbighomework.Theme.MyDataBaseHelper
 import com.example.androidbighomework.Theme.MyTheme
+import com.example.androidbighomework.todoPage.Dao.Todo
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlin.random.Random
 
 // TODO: Rename parameter arguments, choose names that match
 // the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
@@ -51,7 +60,6 @@ class TodoPageFragment : Fragment() {
     // TODO: Rename and change types of parameters
     private var param1: String? = null
     private var param2: String? = null
-    private lateinit var db: SQLiteDatabase
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -71,19 +79,31 @@ class TodoPageFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
-        db = MyDataBaseHelper(requireContext(), "tomatoTodo", 2).writableDatabase
         initCompose()
     }
 
     // 获取倒计时时间工具
     private fun CountTimeTool(index: Int): Int {
-        return when(index) {
+        return when (index) {
             0 -> 25
             1 -> 35
             2 -> 25
             else -> 0
         }
+    }
+
+    // 随机获取背景图片
+    @SuppressLint("DiscouragedApi")
+    private fun GetRandomPicture(): Int {
+        val ranId = Random(System.currentTimeMillis()).nextInt(5)
+        val imageList = listOf<Int>(
+            R.drawable.bg1,
+            R.drawable.bg2,
+            R.drawable.bg3,
+            R.drawable.bg4,
+            R.drawable.bg5
+        )
+        return imageList[ranId]
     }
 
     @Composable
@@ -124,9 +144,18 @@ class TodoPageFragment : Fragment() {
                 ConstraintLayout() {
                     val (button, mainContent) = createRefs()
                     val coroutineScope = rememberCoroutineScope()
-                    var dialogVisiable by remember {
-                        mutableStateOf(true)
+                    val windowManager =
+                        LocalContext.current.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+                    val display = windowManager.defaultDisplay
+                    val screenHeight = with(LocalDensity.current) {
+                        display.getHeight().toDp()
                     }
+
+                    // 显示添加待办的对话框
+                    var dialogVisiable by remember {
+                        mutableStateOf(false)
+                    }
+
                     var addTodoText by remember {
                         mutableStateOf("")
                     }
@@ -143,32 +172,38 @@ class TodoPageFragment : Fragment() {
                     }
                     val totalTimeList = mutableListOf<String>("25分钟", "35分钟", "25分钟")
 
+                    // 待办列表获取
+                    val todoList = remember {
+                        mutableStateListOf<Todo>()
+                    }
+
                     // 添加待办弹窗
                     AnimatedVisibility(
                         modifier = Modifier
                             .zIndex(1f),
                         visible = dialogVisiable,
-                        enter = fadeIn(animationSpec = tween(durationMillis = 1550)),
-                        exit = fadeOut(animationSpec = tween(durationMillis = 1550))
+                        enter = fadeIn(animationSpec = tween(durationMillis = 450)),
+                        exit = fadeOut(animationSpec = tween(durationMillis = 450))
                     ) {
-                        Box(modifier = Modifier.zIndex(1f)) {
-
+                        Box(modifier = Modifier) {
                             // 遮罩层最大
                             Box(
                                 contentAlignment = Alignment.Center,
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .background(color = Color.Black.copy(alpha = 0.6f))
+                                    .padding(horizontal = 60.dp)
                             ) {
+                                // 渐入渐出动画
                                 AnimatedVisibility(
                                     visible = dialogVisiable,
-                                    enter = fadeIn(animationSpec = tween(durationMillis = 1550)),
-                                    exit = fadeOut(animationSpec = tween(durationMillis = 1550))
+                                    enter = fadeIn(animationSpec = tween(durationMillis = 550)),
+                                    exit = fadeOut(animationSpec = tween(durationMillis = 550))
                                 ) {
+                                    // 弹出框本身
                                     Column(
                                         modifier = Modifier
-                                            .width(400.dp)
-                                            .height(300.dp)
+                                            .fillMaxWidth()
                                             .clip(shape = RoundedCornerShape(MyTheme.size.roundedCorner))
                                             .background(color = Color.White)
                                     ) {
@@ -193,10 +228,32 @@ class TodoPageFragment : Fragment() {
                                             Row() {
                                                 // 提交按钮
                                                 IconButton(onClick = {
-                                                    coroutineScope.launch {
-                                                        db.execSQL("insert into todoList (name, total_time, current_progress, add_date, count_type, break_time, todo_notes, todo_notes, repeat_time) values(?, ?, ?, ?, ?, ?, ?,?, ?)",
-                                                            arrayOf(addTodoText, CountTimeTool(totalTimeIndex), 0, 0, countTypeList[countTypeIndex], 0, "", "")
-                                                            )
+                                                    // TODO: 错误性检验
+                                                    // 数据库提交一个todo
+                                                    CoroutineScope(Dispatchers.IO).launch {
+                                                        val todoDao = MyApplication.db.todoDao()
+                                                        val item = Todo(
+                                                            id = 0,     // id填0的时候默认被认为没有设置id，如果填了AutoGenrate的话就能够自动递增
+                                                            todoName = addTodoText,
+                                                            total_time = CountTimeTool(
+                                                                totalTimeIndex
+                                                            ),
+                                                            current_progress = 0,
+                                                            add_date = System.currentTimeMillis(),
+                                                            count_type = countTypeList[countTypeIndex],
+                                                            break_time = 0,
+                                                            todo_notes = "",
+                                                            todo_type = todoTypeList[todoTypeIndex],
+                                                            repeat_time = ""
+                                                        )
+                                                        val result = todoDao.insertTodo(item)
+                                                        if (result > 0) {
+                                                            // TODO: 日后研究研究协程
+                                                            CoroutineScope(Dispatchers.Main).launch {// 这里需不需要去掉
+                                                                todoList.add(item)
+                                                                dialogVisiable = false
+                                                            }
+                                                        }
                                                     }
                                                 }) {
                                                     Icon(
@@ -219,7 +276,6 @@ class TodoPageFragment : Fragment() {
 
                                         Column(
                                             modifier = Modifier
-                                                .fillMaxSize()
                                                 .padding(horizontal = MyTheme.elevation.sidePadding)
                                         ) {
                                             // 待办信息输入栏
@@ -288,6 +344,9 @@ class TodoPageFragment : Fragment() {
                                                     Spacer(modifier = Modifier.width(MyTheme.elevation.contentPadding))
                                                 }
                                             }
+
+                                            // 时间限制
+                                            Spacer(modifier = Modifier.height(MyTheme.elevation.contentPadding))
                                         }
                                     }
                                 }
@@ -394,10 +453,20 @@ class TodoPageFragment : Fragment() {
 
                             Spacer(modifier = Modifier.height(MyTheme.elevation.contentPadding))
 
+                            LaunchedEffect(key1 = Unit) {
+                                CoroutineScope(Dispatchers.IO).launch {
+                                    val todoDao = MyApplication.db.todoDao()
+                                    val todoData = todoDao.getAllTodo()
+                                    todoList.addAll(todoData)
+                                }
+                            }
 
                             // 待办列表
-                            LazyColumn() {
-                                item {
+                            LazyColumn(
+                                verticalArrangement = Arrangement.spacedBy(MyTheme.elevation.contentPadding)
+                            ) {
+                                // TODO: Drow down 阴影不会搞
+                                items(todoList) { item ->
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -406,7 +475,7 @@ class TodoPageFragment : Fragment() {
                                                 shape = RoundedCornerShape(MyTheme.size.roundedCorner),
                                             )
                                             .paint(
-                                                painter = painterResource(id = R.drawable.bg2),
+                                                painter = painterResource(id = GetRandomPicture()),
                                                 contentScale = ContentScale.Crop,
                                                 alignment = Alignment.TopCenter
                                             )
@@ -426,23 +495,39 @@ class TodoPageFragment : Fragment() {
                                             verticalArrangement = Arrangement.SpaceBetween
                                         ) {
                                             Text(
-                                                text = "待办是您要专注的事情",
+                                                text = item.todoName,
                                                 style = MyTheme.typography.todoListTitle.copy(shadow = MyTheme.shadow.toDoListText)
                                             )
                                             Row() {
-                                                Text(
-                                                    text = "正向计时",
-                                                    style = MyTheme.typography.todoListText.copy(
-                                                        shadow = MyTheme.shadow.toDoListText
-                                                    )
-                                                )
-                                                Spacer(modifier = Modifier.width(10.dp))
-                                                Text(
-                                                    text = "1分钟",
-                                                    style = MyTheme.typography.todoListText.copy(
-                                                        shadow = MyTheme.shadow.toDoListText
-                                                    )
-                                                )
+                                                when (item.todo_type) {
+                                                    "普通番茄钟" -> {
+                                                        when (item.count_type) {
+                                                            "正向计时" -> {
+                                                                Text(
+                                                                    text = "正向计时",
+                                                                    style = MyTheme.typography.todoListText.copy(
+                                                                        shadow = MyTheme.shadow.toDoListText
+                                                                    )
+                                                                )
+                                                                Spacer(modifier = Modifier.width(10.dp))
+                                                                Text(
+                                                                    text = item.total_time.toString() + "分钟",
+                                                                    style = MyTheme.typography.todoListText.copy(
+                                                                        shadow = MyTheme.shadow.toDoListText
+                                                                    )
+                                                                )
+                                                            }
+                                                            "倒计时" -> {
+                                                                Text(
+                                                                    text = item.total_time.toString() + "分钟",
+                                                                    style = MyTheme.typography.todoListText.copy(
+                                                                        shadow = MyTheme.shadow.toDoListText
+                                                                    )
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                         Column(

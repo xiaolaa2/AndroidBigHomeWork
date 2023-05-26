@@ -1,13 +1,10 @@
 package com.example.androidbighomework
 
 import android.annotation.SuppressLint
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
+import androidx.appcompat.app.AppCompatActivity
 import androidx.navigation.NavController
 import androidx.navigation.fragment.NavHostFragment
-import com.example.androidbighomework.Theme.MyDataBaseHelper
 import com.google.android.material.tabs.TabLayout
 
 class AppActivity : AppCompatActivity() {
@@ -19,7 +16,6 @@ class AppActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_app)
         supportActionBar?.hide()
-
 
         // 初始化navigation
         navHostFragment = supportFragmentManager.findFragmentById(R.id.nav_host_fragment) as NavHostFragment
