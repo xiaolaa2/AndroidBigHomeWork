@@ -2,6 +2,7 @@ package com.example.androidbighomework.todoPage
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
@@ -9,6 +10,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -147,9 +149,6 @@ class TodoPageFragment : Fragment() {
                     val windowManager =
                         LocalContext.current.getSystemService(Context.WINDOW_SERVICE) as WindowManager
                     val display = windowManager.defaultDisplay
-                    val screenHeight = with(LocalDensity.current) {
-                        display.getHeight().toDp()
-                    }
 
                     // 显示添加待办的对话框
                     var dialogVisiable by remember {
@@ -176,182 +175,135 @@ class TodoPageFragment : Fragment() {
                     val todoList = remember {
                         mutableStateListOf<Todo>()
                     }
+                    LaunchedEffect(key1 = Unit) {
+                        CoroutineScope(Dispatchers.IO).launch {
+                            val todoDao = MyApplication.db.todoDao()
+                            val todoData = todoDao.getAllTodo()
+                            todoList.addAll(todoData)
+                        }
+                    }
 
-                    // 添加待办弹窗
-                    AnimatedVisibility(
+                    MyDialog(
+                        dialogVisible = dialogVisiable,
                         modifier = Modifier
-                            .zIndex(1f),
-                        visible = dialogVisiable,
-                        enter = fadeIn(animationSpec = tween(durationMillis = 450)),
-                        exit = fadeOut(animationSpec = tween(durationMillis = 450))
-                    ) {
-                        Box(modifier = Modifier) {
-                            // 遮罩层最大
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(color = Color.Black.copy(alpha = 0.6f))
-                                    .padding(horizontal = 60.dp)
-                            ) {
-                                // 渐入渐出动画
-                                AnimatedVisibility(
-                                    visible = dialogVisiable,
-                                    enter = fadeIn(animationSpec = tween(durationMillis = 550)),
-                                    exit = fadeOut(animationSpec = tween(durationMillis = 550))
-                                ) {
-                                    // 弹出框本身
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(shape = RoundedCornerShape(MyTheme.size.roundedCorner))
-                                            .background(color = Color.White)
-                                    ) {
-                                        // 标题栏和按钮
-                                        Row(
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier
-                                                .height(60.dp)
-                                                .fillMaxWidth()
-                                                .background(
-                                                    Color(0xffE6E8EB)
-                                                )
-                                                .padding(horizontal = MyTheme.elevation.sidePadding)
-                                        ) {
-                                            Text(
-                                                text = "添加待办",
-                                                style = MyTheme.typography.todoListTitle.copy(
-                                                    color = Color(0xff303133)
-                                                )
-                                            )
-                                            Row() {
-                                                // 提交按钮
-                                                IconButton(onClick = {
-                                                    // TODO: 错误性检验
-                                                    // 数据库提交一个todo
-                                                    CoroutineScope(Dispatchers.IO).launch {
-                                                        val todoDao = MyApplication.db.todoDao()
-                                                        val item = Todo(
-                                                            id = 0,     // id填0的时候默认被认为没有设置id，如果填了AutoGenrate的话就能够自动递增
-                                                            todoName = addTodoText,
-                                                            total_time = CountTimeTool(
-                                                                totalTimeIndex
-                                                            ),
-                                                            current_progress = 0,
-                                                            add_date = System.currentTimeMillis(),
-                                                            count_type = countTypeList[countTypeIndex],
-                                                            break_time = 0,
-                                                            todo_notes = "",
-                                                            todo_type = todoTypeList[todoTypeIndex],
-                                                            repeat_time = ""
-                                                        )
-                                                        val result = todoDao.insertTodo(item)
-                                                        if (result > 0) {
-                                                            // TODO: 日后研究研究协程
-                                                            CoroutineScope(Dispatchers.Main).launch {// 这里需不需要去掉
-                                                                todoList.add(item)
-                                                                dialogVisiable = false
-                                                            }
-                                                        }
-                                                    }
-                                                }) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Done,
-                                                        contentDescription = null
-                                                    )
-                                                }
-                                                IconButton(onClick = {
-                                                    dialogVisiable = false
-                                                }) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Close,
-                                                        contentDescription = null
-                                                    )
-                                                }
-                                            }
-                                        }
-
-                                        Spacer(modifier = Modifier.height(MyTheme.elevation.contentPadding))
-
-                                        Column(
-                                            modifier = Modifier
-                                                .padding(horizontal = MyTheme.elevation.sidePadding)
-                                        ) {
-                                            // 待办信息输入栏
-                                            OutlinedTextField(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                value = addTodoText,
-                                                label = {
-                                                    Text(text = "待办名称")
-                                                },
-                                                placeholder = {
-                                                    Text(text = "请输入待办名称")
-                                                },
-                                                onValueChange = {
-                                                    addTodoText = it
-                                                }
-                                            )
-                                            Spacer(modifier = Modifier.height(MyTheme.elevation.contentPadding))
-                                            Row(
-                                                horizontalArrangement = Arrangement.Center,
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                for ((index, item) in todoTypeList.withIndex()) {
-                                                    MyButton(
-                                                        todoTypeIndex = todoTypeIndex,
-                                                        selfIndex = index,
-                                                        text = item
-                                                    ) {
-                                                        todoTypeIndex = index
-                                                    }
-                                                    Spacer(modifier = Modifier.width(MyTheme.elevation.contentPadding))
-                                                }
-                                            }
-
-                                            // 倒计时类型
-                                            Spacer(modifier = Modifier.height(MyTheme.elevation.contentPadding))
-                                            Row(
-                                                horizontalArrangement = Arrangement.Center,
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                for ((index, item) in countTypeList.withIndex()) {
-                                                    MyButton(
-                                                        todoTypeIndex = countTypeIndex,
-                                                        selfIndex = index,
-                                                        text = item
-                                                    ) {
-                                                        countTypeIndex = index
-                                                    }
-                                                    Spacer(modifier = Modifier.width(MyTheme.elevation.contentPadding))
-                                                }
-                                            }
-
-                                            // 时间限制
-                                            Spacer(modifier = Modifier.height(MyTheme.elevation.contentPadding))
-                                            Row(
-                                                horizontalArrangement = Arrangement.Center,
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                for ((index, item) in totalTimeList.withIndex()) {
-                                                    MyButton(
-                                                        todoTypeIndex = totalTimeIndex,
-                                                        selfIndex = index,
-                                                        text = item
-                                                    ) {
-                                                        totalTimeIndex = index
-                                                    }
-                                                    Spacer(modifier = Modifier.width(MyTheme.elevation.contentPadding))
-                                                }
-                                            }
-
-                                            // 时间限制
-                                            Spacer(modifier = Modifier.height(MyTheme.elevation.contentPadding))
-                                        }
+                            .fillMaxWidth(0.75f)   // 设置大小为父元素的75%
+                            .clip(shape = RoundedCornerShape(MyTheme.size.roundedCorner))
+                            .background(color = Color.White),
+                        onClose = { dialogVisiable = false },
+                        onConfirm = {
+                            // TODO: 错误性检验
+                            // 数据库提交一个todo
+                            CoroutineScope(Dispatchers.IO).launch {
+                                val todoDao = MyApplication.db.todoDao()
+                                val item = Todo(
+                                    id = 0,     // id填0的时候默认被认为没有设置id，如果填了AutoGenrate的话就能够自动递增
+                                    todoName = addTodoText,
+                                    total_time = CountTimeTool(
+                                        totalTimeIndex
+                                    ),
+                                    current_progress = 0,
+                                    add_date = System.currentTimeMillis(),
+                                    count_type = countTypeList[countTypeIndex],
+                                    break_time = 0,
+                                    todo_notes = "",
+                                    todo_type = todoTypeList[todoTypeIndex],
+                                    repeat_time = "",
+                                    is_complete = 0
+                                )
+                                val result = todoDao.insertTodo(item)
+                                if (result > 0) {
+                                    // TODO: 日后研究研究协程
+                                    CoroutineScope(Dispatchers.Main).launch {// 这里需不需要去掉
+                                        todoList.add(item)
+                                        dialogVisiable = false
                                     }
                                 }
                             }
+                        },
+                        title = {
+                            Text(
+                                text = "添加待办",
+                                style = MyTheme.typography.todoListTitle.copy(
+                                    color = Color(0xff303133)
+                                )
+                            )
+                        }
+                    ) {
+                        Spacer(modifier = Modifier.height(MyTheme.elevation.contentPadding))
 
+                        Column(
+                            modifier = Modifier
+                                .padding(horizontal = MyTheme.elevation.sidePadding)
+                        ) {
+                            // 待办信息输入栏
+                            OutlinedTextField(
+                                modifier = Modifier.fillMaxWidth(),
+                                value = addTodoText,
+                                label = {
+                                    Text(text = "待办名称")
+                                },
+                                placeholder = {
+                                    Text(text = "请输入待办名称")
+                                },
+                                onValueChange = {
+                                    addTodoText = it
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(MyTheme.elevation.contentPadding))
+                            Row(
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                for ((index, item) in todoTypeList.withIndex()) {
+                                    MyButton(
+                                        todoTypeIndex = todoTypeIndex,
+                                        selfIndex = index,
+                                        text = item
+                                    ) {
+                                        todoTypeIndex = index
+                                    }
+                                    Spacer(modifier = Modifier.width(MyTheme.elevation.contentPadding))
+                                }
+                            }
+
+                            // 倒计时类型
+                            Spacer(modifier = Modifier.height(MyTheme.elevation.contentPadding))
+                            Row(
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                for ((index, item) in countTypeList.withIndex()) {
+                                    MyButton(
+                                        todoTypeIndex = countTypeIndex,
+                                        selfIndex = index,
+                                        text = item
+                                    ) {
+                                        countTypeIndex = index
+                                    }
+                                    Spacer(modifier = Modifier.width(MyTheme.elevation.contentPadding))
+                                }
+                            }
+
+                            // 时间限制
+                            Spacer(modifier = Modifier.height(MyTheme.elevation.contentPadding))
+                            Row(
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                for ((index, item) in totalTimeList.withIndex()) {
+                                    MyButton(
+                                        todoTypeIndex = totalTimeIndex,
+                                        selfIndex = index,
+                                        text = item
+                                    ) {
+                                        totalTimeIndex = index
+                                    }
+                                    Spacer(modifier = Modifier.width(MyTheme.elevation.contentPadding))
+                                }
+                            }
+
+                            // 时间限制
+                            Spacer(modifier = Modifier.height(MyTheme.elevation.contentPadding))
                         }
                     }
 
@@ -453,11 +405,11 @@ class TodoPageFragment : Fragment() {
 
                             Spacer(modifier = Modifier.height(MyTheme.elevation.contentPadding))
 
-                            LaunchedEffect(key1 = Unit) {
-                                CoroutineScope(Dispatchers.IO).launch {
-                                    val todoDao = MyApplication.db.todoDao()
-                                    val todoData = todoDao.getAllTodo()
-                                    todoList.addAll(todoData)
+                            // 立刻执行内容淡出动画
+                            val state = remember {
+                                MutableTransitionState(false).apply {
+                                    // Start the animation immediately.
+                                    targetState = true
                                 }
                             }
 
@@ -467,82 +419,129 @@ class TodoPageFragment : Fragment() {
                             ) {
                                 // TODO: Drow down 阴影不会搞
                                 items(todoList) { item ->
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(100.dp)
-                                            .clip(
-                                                shape = RoundedCornerShape(MyTheme.size.roundedCorner),
-                                            )
-                                            .paint(
-                                                painter = painterResource(id = GetRandomPicture()),
-                                                contentScale = ContentScale.Crop,
-                                                alignment = Alignment.TopCenter
-                                            )
-                                            .padding(horizontal = 20.dp, vertical = 10.dp)
-                                            .pointerInput(Unit) {
-                                                detectTapGestures(onTap = {
-                                                    Log.d("Todo", "Todo was clicked")
-                                                })
-                                            },
-                                        verticalAlignment = Alignment.CenterVertically
+                                    AnimatedVisibility(
+                                        visibleState = state,
+                                        enter = fadeIn(animationSpec = tween(durationMillis = 850))
                                     ) {
-                                        Column(
+                                        Row(
                                             modifier = Modifier
-                                                .fillMaxHeight()
-                                                .width(0.dp)
-                                                .weight(1f),
-                                            verticalArrangement = Arrangement.SpaceBetween
+                                                .fillMaxWidth()
+                                                .height(100.dp)
+                                                .clip(
+                                                    shape = RoundedCornerShape(MyTheme.size.roundedCorner),
+                                                )
+                                                .paint(
+                                                    painter = painterResource(id = GetRandomPicture()),
+                                                    contentScale = ContentScale.Crop,
+                                                    alignment = Alignment.TopCenter
+                                                )
+                                                .padding(horizontal = 20.dp, vertical = 10.dp)
+                                                .pointerInput(Unit) {
+                                                    detectTapGestures(onTap = {
+                                                        Log.d("Todo", "Todo was clicked")
+                                                    })
+                                                },
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Text(
-                                                text = item.todoName,
-                                                style = MyTheme.typography.todoListTitle.copy(shadow = MyTheme.shadow.toDoListText)
-                                            )
-                                            Row() {
-                                                when (item.todo_type) {
-                                                    "普通番茄钟" -> {
-                                                        when (item.count_type) {
-                                                            "正向计时" -> {
-                                                                Text(
-                                                                    text = "正向计时",
-                                                                    style = MyTheme.typography.todoListText.copy(
-                                                                        shadow = MyTheme.shadow.toDoListText
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxHeight()
+                                                    .width(0.dp)
+                                                    .weight(1f),
+                                                verticalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Text(
+                                                    text = item.todoName,
+                                                    style = MyTheme.typography.todoListTitle.copy(
+                                                        shadow = MyTheme.shadow.toDoListText
+                                                    )
+                                                )
+                                                Row() {
+                                                    when (item.todo_type) {
+                                                        "普通番茄钟" -> {
+                                                            when (item.count_type) {
+                                                                "正向计时" -> {
+                                                                    Text(
+                                                                        text = "正向计时",
+                                                                        style = MyTheme.typography.todoListText.copy(
+                                                                            shadow = MyTheme.shadow.toDoListText
+                                                                        )
                                                                     )
-                                                                )
-                                                                Spacer(modifier = Modifier.width(10.dp))
-                                                                Text(
-                                                                    text = item.total_time.toString() + "分钟",
-                                                                    style = MyTheme.typography.todoListText.copy(
-                                                                        shadow = MyTheme.shadow.toDoListText
+                                                                    Spacer(
+                                                                        modifier = Modifier.width(
+                                                                            10.dp
+                                                                        )
                                                                     )
-                                                                )
-                                                            }
-                                                            "倒计时" -> {
-                                                                Text(
-                                                                    text = item.total_time.toString() + "分钟",
-                                                                    style = MyTheme.typography.todoListText.copy(
-                                                                        shadow = MyTheme.shadow.toDoListText
+                                                                    Text(
+                                                                        text = item.total_time.toString() + "分钟",
+                                                                        style = MyTheme.typography.todoListText.copy(
+                                                                            shadow = MyTheme.shadow.toDoListText
+                                                                        )
                                                                     )
-                                                                )
+                                                                }
+                                                                "倒计时" -> {
+                                                                    Text(
+                                                                        text = "倒计时",
+                                                                        style = MyTheme.typography.todoListText.copy(
+                                                                            shadow = MyTheme.shadow.toDoListText
+                                                                        )
+                                                                    )
+                                                                    Spacer(
+                                                                        modifier = Modifier.width(
+                                                                            10.dp
+                                                                        )
+                                                                    )
+                                                                    Text(
+                                                                        text = item.total_time.toString() + "分钟",
+                                                                        style = MyTheme.typography.todoListText.copy(
+                                                                            shadow = MyTheme.shadow.toDoListText
+                                                                        )
+                                                                    )
+                                                                }
                                                             }
                                                         }
                                                     }
                                                 }
                                             }
-                                        }
-                                        Column(
-                                            modifier = Modifier,
-                                            verticalArrangement = Arrangement.Center,
-                                            horizontalAlignment = Alignment.CenterHorizontally
-                                        ) {
-                                            TextButton(onClick = { /*TODO*/ }) {
+                                            Column(
+                                                modifier = Modifier,
+                                                verticalArrangement = Arrangement.Center,
+                                                horizontalAlignment = Alignment.CenterHorizontally
+                                            ) {
+                                                when (item.is_complete) {
+                                                    0 -> {
+                                                        TextButton(onClick = {
+                                                            // 开始计时捏
+                                                            // 打开专注activity并传递参数
+                                                            val bundle = Bundle().apply {
+                                                                putInt("todoId", item.id)
+                                                            }
+                                                            val intent = Intent(
+                                                                requireContext(),
+                                                                ConcentrateScreen::class.java
+                                                            )
+                                                            intent.putExtras(bundle)
+                                                            startActivity(intent)
+                                                        }) {
+                                                            Text(
+                                                                text = "开始",
+                                                                style = MyTheme.typography.textButton.copy(
+                                                                    shadow = MyTheme.shadow.toDoListText
+                                                                )
+                                                            )
+                                                        }
+                                                    }
+                                                    1 -> {
 
-                                                Text(
-                                                    text = "开始",
-                                                    style = MyTheme.typography.textButton.copy(
-                                                        shadow = MyTheme.shadow.toDoListText
-                                                    )
-                                                )
+                                                        Text(
+                                                            text = "已完成",
+                                                            style = MyTheme.typography.textButton.copy(
+                                                                shadow = MyTheme.shadow.toDoListText
+                                                            )
+                                                        )
+                                                    }
+                                                }
+
                                             }
                                         }
                                     }
@@ -554,13 +553,6 @@ class TodoPageFragment : Fragment() {
                 }
             }
         }
-    }
-
-    @Composable
-    private fun MyJumpOutDialog(
-        visible: Boolean
-    ) {
-
     }
 
     companion object {

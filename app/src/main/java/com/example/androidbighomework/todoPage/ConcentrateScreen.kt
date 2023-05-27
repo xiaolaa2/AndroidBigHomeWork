@@ -5,6 +5,7 @@ import android.content.Context
 import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.os.VibrationEffect
 import android.os.VibratorManager
 import android.util.Log
 import android.widget.Toast
@@ -43,17 +44,28 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.constraintlayout.compose.ConstraintLayout
+import com.example.androidbighomework.MyApplication
 import com.example.androidbighomework.R
 import com.example.androidbighomework.Theme.MyTheme
+import com.example.androidbighomework.todoPage.Dao.Todo
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.random.Random
 
 class ConcentrateScreen : AppCompatActivity() {
+
+    private var todoId: Int = -1
+
     @RequiresApi(Build.VERSION_CODES.S)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_concentrate_screen)
         supportActionBar?.hide()
+
+        todoId = intent.extras?.getInt("todoId") ?: -1
+
         initCompose()
     }
 
@@ -98,15 +110,49 @@ class ConcentrateScreen : AppCompatActivity() {
     @RequiresApi(Build.VERSION_CODES.S)
     private fun initCompose() {
         requireViewById<ComposeView>(R.id.compose_view2).setContent {
-            var countState by remember {
-                mutableStateOf("倒计时")
+            var todo: Todo by remember {
+                mutableStateOf(Todo(-1, "", 1, 1, 0, "", 0, "", "", "", 0))
             }
-            // 页面切换加动画
-            Crossfade(targetState = countState) {page ->
-                when(page) {
-                    "倒计时" -> CountDown(changePageBreak = {countState="休息中"})
-                    "正向计时" -> ForwardTiming()
-                    "休息中" -> BreakTime()
+            var isLoadingComplete by remember {
+                mutableStateOf(false)
+            }
+            // 要使用协程来获取数据
+            LaunchedEffect(true) {
+                CoroutineScope(Dispatchers.IO).launch {
+                    val todoDao = MyApplication.db.todoDao()
+                    todo = todoDao.getTodoById(todoId)
+                    // 切换到主线程
+                    CoroutineScope(Dispatchers.Main).launch {
+                        isLoadingComplete = true
+                    }
+                }
+            }
+            // 这里一定要判断是否已经加载完毕，如果没有加载完毕就显示加载页面，加载完毕就显示专注页面
+            when (isLoadingComplete) {
+                true -> {
+                    var countState by remember {
+                        mutableStateOf(todo.count_type)
+                    }
+                    // 页面切换加动画
+                    Crossfade(targetState = countState) { page ->
+                        when (page) {
+                            "倒计时" -> CountDown(
+                                todo = todo,
+                                changePageBreak = { newTodo ->
+                                    todo = newTodo
+                                    countState = "休息中"
+                                },
+                            )
+                            "正向计时" -> ForwardTiming(todo = todo)
+                            "休息中" -> BreakTime(todo = todo, changePage = {
+                                countState = it
+                            })
+                        }
+                    }
+                }
+                false -> {
+                    // 这里显示加载页面
+                    Text(text = "正在加载当中")
                 }
             }
         }
@@ -114,8 +160,11 @@ class ConcentrateScreen : AppCompatActivity() {
 
     @RequiresApi(Build.VERSION_CODES.S)
     @Composable
-    private fun BreakTime() {
-          MyTheme {
+    private fun BreakTime(
+        todo: Todo,
+        changePage: (String) -> Unit
+    ) {
+        MyTheme {
             // 当前的背景图片
             val nowBgPic by remember {
                 mutableStateOf(GetRandomPicture())
@@ -126,7 +175,7 @@ class ConcentrateScreen : AppCompatActivity() {
             }
             // 当前已经计时的时间
             var nowCountTime by remember {
-                mutableStateOf(0)
+                mutableStateOf(todo.current_progress)
             }
             // 打开暂停对话框
             var dialogVisible by remember {
@@ -142,11 +191,12 @@ class ConcentrateScreen : AppCompatActivity() {
             }
             //待办名称
             val todoNameText by remember {
-                mutableStateOf("这是一个待办")
+                mutableStateOf(todo.todoName)
             }
             val breakTime = 2400
             //震动马达
-            val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            val vibratorManager =
+                getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
             val vibrator = vibratorManager.defaultVibrator
 
             // 计时器
@@ -167,10 +217,15 @@ class ConcentrateScreen : AppCompatActivity() {
                 Toast.makeText(this, "时间到啦", Toast.LENGTH_SHORT).show()
                 hadStop = true
                 // 响1秒，停0.5秒，重复播放震动
-//                    vibrator.vibrate(
-//                        VibrationEffect.createWaveform(longArrayOf(0, 1000, 0, 500),
-//                        intArrayOf(0, 255, 0, 255),
-//                        1))
+                vibrator.vibrate(
+                    VibrationEffect.createWaveform(
+                        longArrayOf(0, 1000, 0, 500),
+                        intArrayOf(0, 255, 0, 255),
+                        0
+                    )
+                )
+                // 切换页面
+                changePage(todo.count_type)
             }
 
             // 停止弹窗
@@ -202,7 +257,10 @@ class ConcentrateScreen : AppCompatActivity() {
                                 .padding(top = 20.dp, bottom = 20.dp, start = 20.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("放弃当前计时", style = MyTheme.typography.regularText.copy(color = Color.Red))
+                            Text(
+                                "放弃当前计时",
+                                style = MyTheme.typography.regularText.copy(color = Color.Red)
+                            )
                         }
                         Row(
                             modifier = Modifier
@@ -295,9 +353,11 @@ class ConcentrateScreen : AppCompatActivity() {
                 val strokeSize = 6f
 
                 // 加一点遮罩背景
-                Box(modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.3f)))
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.3f))
+                )
 
                 // 外部的倒计时进度条
                 Canvas(modifier = Modifier.constrainAs(progressBar) {
@@ -305,24 +365,33 @@ class ConcentrateScreen : AppCompatActivity() {
                 }) {
 
                     // 底部圈
-                    drawArc (
+                    drawArc(
                         color = Color.White,
                         startAngle = -90f,
                         sweepAngle = 360f,
                         useCenter = false,
                         size = Size(width = progressSize.value, height = progressSize.value),
-                        topLeft = Offset(x = -(progressSize.value / 2), y = -(progressSize.value / 2)),
+                        topLeft = Offset(
+                            x = -(progressSize.value / 2),
+                            y = -(progressSize.value / 2)
+                        ),
                         style = Stroke(width = strokeSize),
                         alpha = progressAlpha.value
                     )
                     // 白色色进度条
-                    drawArc (
+                    drawArc(
                         color = Color.White,
                         startAngle = -90f,
                         sweepAngle = current_progress.value * 360f,
                         useCenter = false,
-                        size = Size(width = initialProgressBarSize, height = initialProgressBarSize),
-                        topLeft = Offset(x = -(initialProgressBarSize / 2), y = -(initialProgressBarSize / 2)),
+                        size = Size(
+                            width = initialProgressBarSize,
+                            height = initialProgressBarSize
+                        ),
+                        topLeft = Offset(
+                            x = -(initialProgressBarSize / 2),
+                            y = -(initialProgressBarSize / 2)
+                        ),
                         style = Stroke(width = strokeSize),
                     )
                 }
@@ -392,29 +461,31 @@ class ConcentrateScreen : AppCompatActivity() {
                     )
                 )
 
-                val todoNameTextMargin = with(LocalDensity.current){
+                val todoNameTextMargin = with(LocalDensity.current) {
                     initialProgressBarSize.toDp() / 2 + 30.dp
                 }
 
                 // todoNameText
                 Text(
                     text = todoNameText,
-                    modifier = Modifier.constrainAs(todoName){
+                    modifier = Modifier.constrainAs(todoName) {
                         top.linkTo(progressBar.bottom, margin = todoNameTextMargin)
                         centerHorizontallyTo(parent)
                     },
-                    style = MyTheme.typography.todoListTitle.copy(shadow = MyTheme.shadow.toDoListText))
+                    style = MyTheme.typography.todoListTitle.copy(shadow = MyTheme.shadow.toDoListText)
+                )
 
                 // todoStatusText
                 Text(
                     text = "休息中",
-                    modifier = Modifier.constrainAs(todoStatusText){
+                    modifier = Modifier.constrainAs(todoStatusText) {
                         top.linkTo(todoName.bottom, margin = 8.dp)
                         centerHorizontallyTo(parent)
                     },
                     style = MyTheme.typography.todoListText.copy(
                         shadow = MyTheme.shadow.toDoListText,
-                    ))
+                    )
+                )
 
                 // 控制栏
                 Row(
@@ -481,9 +552,10 @@ class ConcentrateScreen : AppCompatActivity() {
     @RequiresApi(Build.VERSION_CODES.S)
     @Composable
     private fun CountDown(
-        changePageBreak: () -> Unit
-    ){
-         MyTheme {
+        todo: Todo,
+        changePageBreak: (newTodo: Todo) -> Unit,
+    ) {
+        MyTheme {
             // 当前的背景图片
             val nowBgPic by remember {
                 mutableStateOf(GetRandomPicture())
@@ -492,9 +564,10 @@ class ConcentrateScreen : AppCompatActivity() {
             var isCount by remember {
                 mutableStateOf(true)
             }
+            val current_Progress_init = todo.current_progress
             // 当前已经计时的时间
             var nowCountTime by remember {
-                mutableStateOf(0)
+                mutableStateOf(current_Progress_init)
             }
             // 打开暂停对话框
             var dialogVisible by remember {
@@ -510,11 +583,12 @@ class ConcentrateScreen : AppCompatActivity() {
             }
             //待办名称
             val todoNameText by remember {
-                mutableStateOf("这是一个待办")
+                mutableStateOf(todo.todoName)
             }
-            val totalTime = 10
+            val totalTime = todo.total_time
             //震动马达
-            val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            val vibratorManager =
+                getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
             val vibrator = vibratorManager.defaultVibrator
 
             // 计时器
@@ -522,6 +596,8 @@ class ConcentrateScreen : AppCompatActivity() {
                 LaunchedEffect(isCount) {
                     repeat(totalTime) {
                         nowCountTime++
+                        // 修改todo内容的值
+                        todo.current_progress = nowCountTime
                         delay(1000)   // 延迟一秒
                     }
                 }
@@ -534,12 +610,26 @@ class ConcentrateScreen : AppCompatActivity() {
                 isCount = false
                 Toast.makeText(this, "时间到啦", Toast.LENGTH_SHORT).show()
                 hadStop = true
+                // 如果时间已经满了就标记当前的todo为已完成
+                if (todo.current_progress == todo.total_time) {
+                    todo.is_complete = 1
+                }
                 // 响1秒，停0.5秒，重复播放震动
-//                    vibrator.vibrate(
-//                        VibrationEffect.createWaveform(longArrayOf(0, 1000, 0, 500),
-//                        intArrayOf(0, 255, 0, 255),
-//                        1))
-                changePageBreak()
+                vibrator.vibrate(
+                    VibrationEffect.createWaveform(
+                        longArrayOf(0, 1000, 0, 500),
+                        intArrayOf(0, 255, 0, 255),
+                        0
+                    )
+                )
+                // 更新一下数据库里的todo
+                LaunchedEffect(true) {
+                    CoroutineScope(Dispatchers.IO).launch {
+                        val todoDao = MyApplication.db.todoDao()
+                        todoDao.updateTodo(todo)
+                    }
+                }
+                changePageBreak(todo)
             }
 
             // 停止弹窗
@@ -571,7 +661,10 @@ class ConcentrateScreen : AppCompatActivity() {
                                 .padding(top = 20.dp, bottom = 20.dp, start = 20.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("放弃当前计时", style = MyTheme.typography.regularText.copy(color = Color.Red))
+                            Text(
+                                "放弃当前计时",
+                                style = MyTheme.typography.regularText.copy(color = Color.Red)
+                            )
                         }
                         Row(
                             modifier = Modifier
@@ -664,9 +757,11 @@ class ConcentrateScreen : AppCompatActivity() {
                 val strokeSize = 6f
 
                 // 加一点遮罩背景
-                Box(modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.3f)))
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.3f))
+                )
 
                 // 外部的倒计时进度条
                 Canvas(modifier = Modifier.constrainAs(progressBar) {
@@ -674,24 +769,33 @@ class ConcentrateScreen : AppCompatActivity() {
                 }) {
 
                     // 底部圈
-                    drawArc (
+                    drawArc(
                         color = Color.White,
                         startAngle = -90f,
                         sweepAngle = 360f,
                         useCenter = false,
                         size = Size(width = progressSize.value, height = progressSize.value),
-                        topLeft = Offset(x = -(progressSize.value / 2), y = -(progressSize.value / 2)),
+                        topLeft = Offset(
+                            x = -(progressSize.value / 2),
+                            y = -(progressSize.value / 2)
+                        ),
                         style = Stroke(width = strokeSize),
                         alpha = progressAlpha.value
                     )
                     // 白色色进度条
-                    drawArc (
+                    drawArc(
                         color = Color.White,
                         startAngle = -90f,
                         sweepAngle = current_progress.value * 360f,
                         useCenter = false,
-                        size = Size(width = initialProgressBarSize, height = initialProgressBarSize),
-                        topLeft = Offset(x = -(initialProgressBarSize / 2), y = -(initialProgressBarSize / 2)),
+                        size = Size(
+                            width = initialProgressBarSize,
+                            height = initialProgressBarSize
+                        ),
+                        topLeft = Offset(
+                            x = -(initialProgressBarSize / 2),
+                            y = -(initialProgressBarSize / 2)
+                        ),
                         style = Stroke(width = strokeSize),
                     )
                 }
@@ -761,29 +865,31 @@ class ConcentrateScreen : AppCompatActivity() {
                     )
                 )
 
-                val todoNameTextMargin = with(LocalDensity.current){
+                val todoNameTextMargin = with(LocalDensity.current) {
                     initialProgressBarSize.toDp() / 2 + 30.dp
                 }
 
                 // todoNameText
                 Text(
                     text = todoNameText,
-                    modifier = Modifier.constrainAs(todoName){
+                    modifier = Modifier.constrainAs(todoName) {
                         top.linkTo(progressBar.bottom, margin = todoNameTextMargin)
                         centerHorizontallyTo(parent)
                     },
-                    style = MyTheme.typography.todoListTitle.copy(shadow = MyTheme.shadow.toDoListText))
+                    style = MyTheme.typography.todoListTitle.copy(shadow = MyTheme.shadow.toDoListText)
+                )
 
                 // todoStatusText
                 Text(
-                    text = if(isCount) "进行中" else "已暂停",
-                    modifier = Modifier.constrainAs(todoStatusText){
+                    text = if (isCount) "进行中" else "已暂停",
+                    modifier = Modifier.constrainAs(todoStatusText) {
                         top.linkTo(todoName.bottom, margin = 8.dp)
                         centerHorizontallyTo(parent)
                     },
                     style = MyTheme.typography.todoListText.copy(
                         shadow = MyTheme.shadow.toDoListText,
-                    ))
+                    )
+                )
 
                 // 控制栏
                 Row(
@@ -850,7 +956,7 @@ class ConcentrateScreen : AppCompatActivity() {
     // 正向计时的界面
     @RequiresApi(Build.VERSION_CODES.S)
     @Composable
-    private fun ForwardTiming() {
+    private fun ForwardTiming(todo: Todo) {
         MyTheme {
             // 当前的背景图片
             val nowBgPic by remember {
@@ -882,7 +988,8 @@ class ConcentrateScreen : AppCompatActivity() {
             }
             val totalTime = 10
             //震动马达
-            val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            val vibratorManager =
+                getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
             val vibrator = vibratorManager.defaultVibrator
 
             // 计时器
@@ -926,7 +1033,10 @@ class ConcentrateScreen : AppCompatActivity() {
                                 .padding(top = 20.dp, bottom = 20.dp, start = 20.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("放弃当前计时", style = MyTheme.typography.regularText.copy(color = Color.Red))
+                            Text(
+                                "放弃当前计时",
+                                style = MyTheme.typography.regularText.copy(color = Color.Red)
+                            )
                         }
                         Row(
                             modifier = Modifier
@@ -1053,20 +1163,22 @@ class ConcentrateScreen : AppCompatActivity() {
                 // todoNameText
                 Text(
                     text = todoNameText,
-                    modifier = Modifier.constrainAs(todoName){
+                    modifier = Modifier.constrainAs(todoName) {
                         top.linkTo(countTimeText.bottom, margin = 50.dp)
                         centerHorizontallyTo(parent)
                     },
-                    style = MyTheme.typography.todoListTitle.copy(shadow = MyTheme.shadow.toDoListText))
+                    style = MyTheme.typography.todoListTitle.copy(shadow = MyTheme.shadow.toDoListText)
+                )
 
                 // todoNameText
                 Text(
-                    text = if(isCount) "进行中" else "已暂停",
-                    modifier = Modifier.constrainAs(todoStatusText){
+                    text = if (isCount) "进行中" else "已暂停",
+                    modifier = Modifier.constrainAs(todoStatusText) {
                         top.linkTo(todoName.bottom, margin = 20.dp)
                         centerHorizontallyTo(parent)
                     },
-                    style = MyTheme.typography.todoListTitle.copy(shadow = MyTheme.shadow.toDoListText))
+                    style = MyTheme.typography.todoListTitle.copy(shadow = MyTheme.shadow.toDoListText)
+                )
 
                 // 控制栏
                 Row(
@@ -1130,98 +1242,4 @@ class ConcentrateScreen : AppCompatActivity() {
         }
     }
 
-    @Composable
-    private fun MyDialog(
-        dialogVisible: Boolean,
-        modifier: Modifier,
-        onClose: ()->Unit,
-        title: @Composable ()->Unit,
-        content: @Composable ()->Unit,
-    ) {
-        // 添加待办弹窗
-        AnimatedVisibility(
-            modifier = Modifier
-                .zIndex(1f),
-            visible = dialogVisible,
-            enter = fadeIn(animationSpec = tween(durationMillis = 450)),
-            exit = fadeOut(animationSpec = tween(durationMillis = 450))
-        ) {
-            Box(modifier = Modifier) {
-                // 遮罩层最大
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(color = Color.Black.copy(alpha = 0.6f))
-                        .padding(horizontal = 60.dp)
-                        .pointerInput(Unit) {
-                            detectTapGestures(onTap = {
-
-                            })
-                        }
-                ) {
-
-                }
-
-                // 内容部分
-                ConstraintLayout(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .zIndex(2f)
-                ) {
-                    val dialogBody = createRef()
-                    // 渐入渐出动画
-                    AnimatedVisibility(
-                        modifier = Modifier.constrainAs(dialogBody) {
-                            centerTo(parent)
-                        },
-                        visible = dialogVisible,
-                        enter = fadeIn(animationSpec = tween(durationMillis = 550)),
-                        exit = fadeOut(animationSpec = tween(durationMillis = 550))
-                    ) {
-                        // 弹出框本身
-                        Column(
-                            modifier = modifier
-                        ) {
-                            // 标题栏和按钮
-                            Row(
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .height(60.dp)
-                                    .fillMaxWidth()
-                                    .background(
-                                        Color(0xffE6E8EB)
-                                    )
-                                    .padding(horizontal = MyTheme.elevation.sidePadding)
-                            ) {
-                                title()
-                                Row() {
-                                    // 提交按钮
-                                    IconButton(onClick = {
-                                    }) {
-                                        Icon(
-                                            imageVector = Icons.Default.Done,
-                                            contentDescription = null
-                                        )
-                                    }
-                                    IconButton(onClick = {
-                                        onClose()
-                                    }) {
-                                        Icon(
-                                            imageVector = Icons.Default.Close,
-                                            contentDescription = null
-                                        )
-                                    }
-                                }
-                            }
-
-                            // 底部内容
-                            content()
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
