@@ -7,20 +7,53 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.constraintlayout.compose.ConstraintLayout
 import com.example.androidbighomework.Theme.MyTheme
+
+@Composable
+public fun MyButton(todoTypeIndex: Int, selfIndex: Int, text: String, onClick: () -> Unit) {
+    // 自定义按钮
+    Column(
+        modifier = Modifier
+            .clip(shape = RoundedCornerShape(MyTheme.size.buttonRoundedCorner))
+            .background(if (todoTypeIndex == selfIndex) Color(0xffd9ecff) else Color(0xffE6E8EB))
+            .padding(
+                horizontal = 7.dp,
+                vertical = 8.dp
+            )
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = {
+                        onClick()
+                    }
+                )
+            }
+    ) {
+        Text(
+            text = text,
+            style =
+            if (todoTypeIndex == selfIndex)
+                MyTheme.typography.regularText.copy(color = Color(0xff409EFF))
+            else
+                MyTheme.typography.regularText
+        )
+    }
+}
 
 @Composable
 fun MyDialog(

@@ -2,6 +2,7 @@ package com.example.androidbighomework.todoPage
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
@@ -44,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.constraintlayout.compose.ConstraintLayout
+import com.example.androidbighomework.AppActivity
 import com.example.androidbighomework.MyApplication
 import com.example.androidbighomework.R
 import com.example.androidbighomework.Theme.MyTheme
@@ -57,6 +59,7 @@ import kotlin.random.Random
 class ConcentrateScreen : AppCompatActivity() {
 
     private var todoId: Int = -1
+    private lateinit var context: Context
 
     @RequiresApi(Build.VERSION_CODES.S)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -65,6 +68,7 @@ class ConcentrateScreen : AppCompatActivity() {
         supportActionBar?.hide()
 
         todoId = intent.extras?.getInt("todoId") ?: -1
+        context = this
 
         initCompose()
     }
@@ -406,7 +410,11 @@ class ConcentrateScreen : AppCompatActivity() {
                         },
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    IconButton(onClick = { /*TODO*/ }) {
+                    IconButton(onClick = {
+                        Log.d("test", "返回")
+                        val intent = Intent(context, AppActivity::class.java)
+                        startActivity(intent)
+                    }) {
                         Icon(
                             modifier = Modifier.size(MyTheme.size.actionBarIcon),
                             imageVector = Icons.Default.Close,
@@ -603,6 +611,12 @@ class ConcentrateScreen : AppCompatActivity() {
                 }
             } else {
 //                    Toast.makeText(this, "计时停止", Toast.LENGTH_SHORT).show()
+                LaunchedEffect(true) {
+                    CoroutineScope( Dispatchers.IO).launch {
+                        val todoDao = MyApplication.db.todoDao()
+                        todoDao.updateTodo(todo)
+                    }
+                }
             }
 
             // 时间到了

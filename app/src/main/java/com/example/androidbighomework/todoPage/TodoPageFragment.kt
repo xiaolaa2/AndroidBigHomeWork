@@ -13,7 +13,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -33,10 +32,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import androidx.constraintlayout.compose.ConstraintLayout
 import androidx.fragment.app.Fragment
 import com.example.androidbighomework.MyApplication
@@ -87,9 +84,9 @@ class TodoPageFragment : Fragment() {
     // 获取倒计时时间工具
     private fun CountTimeTool(index: Int): Int {
         return when (index) {
-            0 -> 25
-            1 -> 35
-            2 -> 25
+            0 -> 25 * 60
+            1 -> 25 * 60
+            2 -> 60
             else -> 0
         }
     }
@@ -108,36 +105,6 @@ class TodoPageFragment : Fragment() {
         return imageList[ranId]
     }
 
-    @Composable
-    private fun MyButton(todoTypeIndex: Int, selfIndex: Int, text: String, CallBack: () -> Unit) {
-        // 自定义按钮
-        Column(
-            modifier = Modifier
-                .clip(shape = RoundedCornerShape(MyTheme.size.buttonRoundedCorner))
-                .background(if (todoTypeIndex == selfIndex) Color(0xffd9ecff) else Color(0xffE6E8EB))
-                .padding(
-                    horizontal = 7.dp,
-                    vertical = 8.dp
-                )
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onTap = {
-                            CallBack()
-                        }
-                    )
-                }
-        ) {
-            Text(
-                text = text,
-                style =
-                if (todoTypeIndex == selfIndex)
-                    MyTheme.typography.regularText.copy(color = Color(0xff409EFF))
-                else
-                    MyTheme.typography.regularText
-            )
-        }
-    }
-
     @OptIn(ExperimentalMaterial3Api::class)
     private fun initCompose() {
         requireView().findViewById<ComposeView>(R.id.compose_view).setContent {
@@ -150,14 +117,13 @@ class TodoPageFragment : Fragment() {
                         LocalContext.current.getSystemService(Context.WINDOW_SERVICE) as WindowManager
                     val display = windowManager.defaultDisplay
 
-                    // 显示添加待办的对话框
-                    var dialogVisiable by remember {
-                        mutableStateOf(false)
-                    }
-
                     var addTodoText by remember {
                         mutableStateOf("")
                     }
+                    var customTimeText by remember {
+                        mutableStateOf("")
+                    }
+
                     var todoTypeIndex by remember {
                         mutableStateOf(-1)
                     }
@@ -169,12 +135,32 @@ class TodoPageFragment : Fragment() {
                     var totalTimeIndex by remember {
                         mutableStateOf(-1)
                     }
-                    val totalTimeList = mutableListOf<String>("25分钟", "35分钟", "25分钟")
+                    val totalTimeList = mutableListOf<String>("25分钟", "35分钟", "自定义")
 
                     // 待办列表获取
                     val todoList = remember {
                         mutableStateListOf<Todo>()
                     }
+
+                    // 总时间
+                    var totalTime by remember {
+                        mutableStateOf(0)
+                    }
+
+
+                    /*
+                     * 控制显示的变量
+                     */
+                    // 显示添加待办的对话框
+                    var dialogVisiable by remember {
+                        mutableStateOf(false)
+                    }
+                    // 显示自定义时间输入框
+                    val showCustomTotalTime = remember {
+                        derivedStateOf { totalTimeIndex == 2 }
+                    }
+
+
                     LaunchedEffect(key1 = Unit) {
                         CoroutineScope(Dispatchers.IO).launch {
                             val todoDao = MyApplication.db.todoDao()
@@ -198,13 +184,16 @@ class TodoPageFragment : Fragment() {
                                 val item = Todo(
                                     id = 0,     // id填0的时候默认被认为没有设置id，如果填了AutoGenrate的话就能够自动递增
                                     todoName = addTodoText,
-                                    total_time = CountTimeTool(
-                                        totalTimeIndex
-                                    ),
+                                    total_time = when(totalTime){
+                                        0 -> 25*60
+                                        1 -> 35*60
+                                        2 -> customTimeText.toInt() * 60
+                                        else -> 0
+                                    },
                                     current_progress = 0,
                                     add_date = System.currentTimeMillis(),
                                     count_type = countTypeList[countTypeIndex],
-                                    break_time = 0,
+                                    break_time = 240,
                                     todo_notes = "",
                                     todo_type = todoTypeList[todoTypeIndex],
                                     repeat_time = "",
@@ -250,6 +239,30 @@ class TodoPageFragment : Fragment() {
                                 }
                             )
                             Spacer(modifier = Modifier.height(MyTheme.elevation.contentPadding))
+                            // 自定义时间输入
+                            if (showCustomTotalTime.value) {
+                                // 待办信息输入栏
+                                OutlinedTextField(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    value = customTimeText,
+                                    label = {
+                                        Text(text = "自定义时间")
+                                    },
+                                    placeholder = {
+                                        Text(text = "请输入您的待办完成时间")
+                                    },
+                                    onValueChange = {text ->
+                                        // 如果是数字就接受
+                                        when(text.isNotEmpty() && text.all{c -> c.isDigit()}) {
+                                            true -> {
+                                                customTimeText = text
+                                            }
+                                            false -> {}
+                                        }
+                                    }
+                                )
+                                Spacer(modifier = Modifier.height(MyTheme.elevation.contentPadding))
+                            }
                             Row(
                                 horizontalArrangement = Arrangement.Center,
                                 modifier = Modifier.fillMaxWidth()
@@ -296,6 +309,7 @@ class TodoPageFragment : Fragment() {
                                         selfIndex = index,
                                         text = item
                                     ) {
+                                        // 回调函数
                                         totalTimeIndex = index
                                     }
                                     Spacer(modifier = Modifier.width(MyTheme.elevation.contentPadding))
@@ -304,6 +318,7 @@ class TodoPageFragment : Fragment() {
 
                             // 时间限制
                             Spacer(modifier = Modifier.height(MyTheme.elevation.contentPadding))
+
                         }
                     }
 
@@ -473,7 +488,7 @@ class TodoPageFragment : Fragment() {
                                                                         )
                                                                     )
                                                                     Text(
-                                                                        text = item.total_time.toString() + "分钟",
+                                                                        text = (item.total_time/60).toString() + "分钟",
                                                                         style = MyTheme.typography.todoListText.copy(
                                                                             shadow = MyTheme.shadow.toDoListText
                                                                         )
@@ -492,7 +507,7 @@ class TodoPageFragment : Fragment() {
                                                                         )
                                                                     )
                                                                     Text(
-                                                                        text = item.total_time.toString() + "分钟",
+                                                                        text = (item.total_time/60).toString() + "分钟",
                                                                         style = MyTheme.typography.todoListText.copy(
                                                                             shadow = MyTheme.shadow.toDoListText
                                                                         )
