@@ -58,7 +58,7 @@ import kotlin.random.Random
 
 class ConcentrateScreen : AppCompatActivity() {
 
-    private var todoId: Int = -1
+    private var todoId: Long = -1
     private lateinit var context: Context
 
     @RequiresApi(Build.VERSION_CODES.S)
@@ -67,7 +67,7 @@ class ConcentrateScreen : AppCompatActivity() {
         setContentView(R.layout.activity_concentrate_screen)
         supportActionBar?.hide()
 
-        todoId = intent.extras?.getInt("todoId") ?: -1
+        todoId = intent.extras?.getLong("todoId") ?: -1
         context = this
 
         initCompose()
@@ -132,7 +132,7 @@ class ConcentrateScreen : AppCompatActivity() {
                 }
             }
             // 这里一定要判断是否已经加载完毕，如果没有加载完毕就显示加载页面，加载完毕就显示专注页面
-            when (isLoadingComplete) {
+            when (isLoadingComplete && todo != null) {
                 true -> {
                     var countState by remember {
                         mutableStateOf(todo.count_type)
@@ -633,7 +633,7 @@ class ConcentrateScreen : AppCompatActivity() {
                     VibrationEffect.createWaveform(
                         longArrayOf(0, 1000, 0, 500),
                         intArrayOf(0, 255, 0, 255),
-                        0
+                        -1
                     )
                 )
                 // 更新一下数据库里的todo
@@ -650,7 +650,7 @@ class ConcentrateScreen : AppCompatActivity() {
             MyDialog(
                 dialogVisible = stopDialogVisible,
                 modifier = Modifier
-                    .fillMaxWidth(0.75f)   // 设置大小为父元素的75%
+                    .fillMaxWidth(0.80f)   // 设置大小为父元素的75%
                     .clip(shape = RoundedCornerShape(MyTheme.size.roundedCorner))
                     .background(color = Color.White),
                 onClose = {
@@ -658,7 +658,7 @@ class ConcentrateScreen : AppCompatActivity() {
                 },
                 title = {
                     Text(
-                        text = "添加待办",
+                        text = "请选择你的操作",
                         style = MyTheme.typography.todoListTitle.copy(
                             color = Color(0xff303133)
                         )
@@ -687,7 +687,7 @@ class ConcentrateScreen : AppCompatActivity() {
                                 .padding(top = 20.dp, bottom = 20.dp, start = 20.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("退出当前计时", style = MyTheme.typography.regularText)
+                            Text("提取完成计时", style = MyTheme.typography.regularText)
                         }
                         Row(
                             modifier = Modifier
@@ -708,7 +708,7 @@ class ConcentrateScreen : AppCompatActivity() {
             MyDialog(
                 dialogVisible = dialogVisible,
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .fillMaxWidth(0.80f)
                     .clip(shape = RoundedCornerShape(MyTheme.size.roundedCorner))
                     .background(color = Color.White),
                 onClose = {
@@ -717,7 +717,7 @@ class ConcentrateScreen : AppCompatActivity() {
                 },
                 title = {
                     Text(
-                        text = "添加待办",
+                        text = "暂停",
                         style = MyTheme.typography.todoListTitle.copy(
                             color = Color(0xff303133)
                         )
@@ -748,7 +748,9 @@ class ConcentrateScreen : AppCompatActivity() {
                 val current_progress = remember(nowCountTime) {
                     derivedStateOf { (totalTime - nowCountTime) / totalTime.toFloat() }
                 }
-                val initialProgressBarSize = 300f
+                val initialProgressBarSize = with(LocalDensity.current) {
+                    200.dp.toPx()
+                }
 
                 // 进度条的动画显示
                 val transition = rememberInfiniteTransition()
@@ -768,7 +770,9 @@ class ConcentrateScreen : AppCompatActivity() {
                         repeatMode = RepeatMode.Restart
                     )
                 )
-                val strokeSize = 6f
+                val strokeSize = with(LocalDensity.current) {
+                    4.dp.toPx()
+                }
 
                 // 加一点遮罩背景
                 Box(
@@ -824,7 +828,12 @@ class ConcentrateScreen : AppCompatActivity() {
                         },
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    IconButton(onClick = { /*TODO*/ }) {
+                    IconButton(onClick = {
+                        Log.d("test", "hello world")
+                        val intent = Intent(context, AppActivity::class.java)
+                        startActivity(intent)
+                        finish()
+                    }) {
                         Icon(
                             modifier = Modifier.size(MyTheme.size.actionBarIcon),
                             imageVector = Icons.Default.Close,
@@ -864,17 +873,10 @@ class ConcentrateScreen : AppCompatActivity() {
                     text = getCurrentTime(totalTime - nowCountTime),
                     modifier = Modifier
                         .constrainAs(countTimeText) {
-                            linkTo(
-                                start = parent.start,
-                                top = parent.top,
-                                bottom = parent.bottom,
-                                end = parent.end,
-                                horizontalBias = 0.5f,
-                                verticalBias = 0.5f
-                            )
+                            centerTo(parent)
                         },
                     style = MyTheme.typography.todoListTitle.copy(
-                        fontSize = 46.sp,
+                        fontSize = 36.sp,
                         shadow = MyTheme.shadow.toDoListText
                     )
                 )
@@ -910,7 +912,7 @@ class ConcentrateScreen : AppCompatActivity() {
                     modifier = Modifier
                         .constrainAs(controlBar) {
                             // 在底部
-                            bottom.linkTo(parent.bottom, margin = 100.dp)
+                            bottom.linkTo(parent.bottom, margin = 70.dp)
                             // 水平居中
                             centerHorizontallyTo(parent, 0.5f)
                         },

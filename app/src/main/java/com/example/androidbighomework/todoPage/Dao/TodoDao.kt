@@ -15,13 +15,17 @@ interface TodoDao {
     fun getAllTodoNotComplete(): Array<Todo>
 
     @Query("select * from todos where id = :todoId")
-    fun getTodoById(todoId: Int): Todo
+    fun getTodoById(todoId: Long): Todo
 
     /*
      * 插入一个todo
      */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     fun insertTodo(todo: Todo): Long
+
+    // 删除一个todo
+    @Delete
+    fun deleteTodo(todo: Todo): Int
 
     @Update
     fun updateTodo(todo: Todo): Int

@@ -21,6 +21,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
 import androidx.constraintlayout.compose.ConstraintLayout
 import com.example.androidbighomework.Theme.MyTheme
@@ -55,6 +56,70 @@ public fun MyButton(todoTypeIndex: Int, selfIndex: Int, text: String, onClick: (
     }
 }
 
+@Composable
+fun MyDialogNoButton(
+    dialogVisible: Boolean,
+    modifier: Modifier,
+    onClose: () -> Unit,
+    onConfirm: () -> Unit = {},
+    title: @Composable () -> Unit = {},
+    content: @Composable () -> Unit = {},
+) {
+    // 添加待办弹窗
+    AnimatedVisibility(
+        modifier = Modifier
+            .zIndex(1f),
+        visible = dialogVisible,
+        enter = fadeIn(animationSpec = tween(durationMillis = 450)),
+        exit = fadeOut(animationSpec = tween(durationMillis = 450))
+    ) {
+        Box(modifier = Modifier) {
+            // 遮罩层最大
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(color = Color.Black.copy(alpha = 0.6f))
+                    .padding(horizontal = 60.dp)
+                    .pointerInput(Unit) {
+                        detectTapGestures(onTap = {
+
+                        })
+                    }
+            ) {
+
+            }
+
+            // 内容部分
+            ConstraintLayout(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(2f)
+            ) {
+                val dialogBody = createRef()
+                // 渐入渐出动画
+                AnimatedVisibility(
+                    modifier = Modifier.constrainAs(dialogBody) {
+                        centerTo(parent)
+                    },
+                    visible = dialogVisible,
+                    enter = fadeIn(animationSpec = tween(durationMillis = 550)),
+                    exit = fadeOut(animationSpec = tween(durationMillis = 550))
+                ) {
+                    // 弹出框本身
+                    Column(
+                        modifier = modifier
+                    ) {
+                        // 标题栏和按钮
+                        title()
+                        // 底部内容
+                        content()
+                    }
+                }
+            }
+        }
+    }
+}
 @Composable
 fun MyDialog(
     dialogVisible: Boolean,
