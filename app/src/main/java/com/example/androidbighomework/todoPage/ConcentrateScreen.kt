@@ -3,34 +3,31 @@ package com.example.androidbighomework.todoPage
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
+import android.media.MediaPlayer
+import android.net.Uri
 import android.os.Build
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.os.VibrationEffect
 import android.os.VibratorManager
+import android.provider.OpenableColumns
 import android.util.Log
 import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.result.registerForActivityResult
 import androidx.annotation.RequiresApi
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.*
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,15 +37,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.zIndex
 import androidx.constraintlayout.compose.ConstraintLayout
 import com.example.androidbighomework.AppActivity
 import com.example.androidbighomework.MyApplication
@@ -56,27 +50,36 @@ import com.example.androidbighomework.R
 import com.example.androidbighomework.Theme.MyTheme
 import com.example.androidbighomework.todoPage.Dao.Music
 import com.example.androidbighomework.todoPage.Dao.Todo
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
+import java.io.File
+import java.io.FileOutputStream
 import kotlin.random.Random
 
-class ConcentrateScreen : AppCompatActivity() {
+class ConcentrateScreen : ComponentActivity() {
 
     private var todoId: Long = -1
     private lateinit var context: Context
+    var mediaPlayer = MediaPlayer()
 
+    enum class MediaPlayerStatus {  // Wait表示的是还未初始化完毕，NotStart表示准备好开始播放，
+        Pausing, Playing, NotStart, Wait
+    }
+
+    @SuppressLint("RestrictedApi")
     @RequiresApi(Build.VERSION_CODES.S)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_concentrate_screen)
-        supportActionBar?.hide()
-
         todoId = intent.extras?.getLong("todoId") ?: -1
         context = this
 
-        initCompose()
+        setContent {
+            initCompose()
+        }
+    }
+
+    override fun onDestroy() {
+        mediaPlayer.release()
+        super.onDestroy()
     }
 
     @SuppressLint("DiscouragedApi")
@@ -96,7 +99,7 @@ class ConcentrateScreen : AppCompatActivity() {
     private fun getCurrentTime(sec: Int): String {
         // 要前导零
         val second = sec % 60
-        val minute = (sec / 60).toInt()
+        val minute = (sec / 60)
         val secondStr = when (second) {
             in 0..9 -> {
                 "0$second"
@@ -118,53 +121,52 @@ class ConcentrateScreen : AppCompatActivity() {
 
     @SuppressLint("ServiceCast")
     @RequiresApi(Build.VERSION_CODES.S)
+    @Composable
     private fun initCompose() {
-        requireViewById<ComposeView>(R.id.compose_view2).setContent {
-            var todo: Todo by remember {
-                mutableStateOf(Todo(-1, "", 1, 1, 0, "", 0, "", "", "", 0))
+        var todo: Todo by remember {
+            mutableStateOf(Todo(-1, "", 1, 1, 0, "", 0, "", "", "", 0))
+        }
+        var isLoadingComplete by remember {
+            mutableStateOf(false)
+        }
+        // 要使用协程来获取数据
+        LaunchedEffect(true) {
+            CoroutineScope(Dispatchers.IO).launch {
+                val todoDao = MyApplication.db.todoDao()
+//                todo = todoDao.getTodoById(todoId)
+                todo = todoDao.getTheFirstTodo()
+                // 切换到主线程
+                CoroutineScope(Dispatchers.Main).launch {
+                    isLoadingComplete = true
+                }
             }
-            var isLoadingComplete by remember {
-                mutableStateOf(false)
-            }
-            // 要使用协程来获取数据
-            LaunchedEffect(true) {
-                CoroutineScope(Dispatchers.IO).launch {
-                    val todoDao = MyApplication.db.todoDao()
-//                    todo = todoDao.getTodoById(todoId)
-                    todo = todoDao.getTheFirstTodo()
-                    // 切换到主线程
-                    CoroutineScope(Dispatchers.Main).launch {
-                        isLoadingComplete = true
+        }
+        // 这里一定要判断是否已经加载完毕，如果没有加载完毕就显示加载页面，加载完毕就显示专注页面
+        when (isLoadingComplete) {
+            true -> {
+                var countState by remember {
+                    mutableStateOf(todo.count_type)
+                }
+                // 页面切换加动画
+                Crossfade(targetState = countState) { page ->
+                    when (page) {
+                        "倒计时" -> CountDown(
+                            todo = todo,
+                            changePageBreak = { newTodo ->
+                                todo = newTodo
+                                countState = "休息中"
+                            },
+                        )
+                        "正向计时" -> ForwardTiming(todo = todo)
+                        "休息中" -> BreakTime(todo = todo, changePage = {
+                            countState = it
+                        })
                     }
                 }
             }
-            // 这里一定要判断是否已经加载完毕，如果没有加载完毕就显示加载页面，加载完毕就显示专注页面
-            when (isLoadingComplete && todo != null) {
-                true -> {
-                    var countState by remember {
-                        mutableStateOf(todo.count_type)
-                    }
-                    // 页面切换加动画
-                    Crossfade(targetState = countState) { page ->
-                        when (page) {
-                            "倒计时" -> CountDown(
-                                todo = todo,
-                                changePageBreak = { newTodo ->
-                                    todo = newTodo
-                                    countState = "休息中"
-                                },
-                            )
-                            "正向计时" -> ForwardTiming(todo = todo)
-                            "休息中" -> BreakTime(todo = todo, changePage = {
-                                countState = it
-                            })
-                        }
-                    }
-                }
-                false -> {
-                    // 这里显示加载页面
-                    Text(text = "正在加载当中")
-                }
+            false -> {
+                // 这里显示加载页面
+                Text(text = "正在加载当中")
             }
         }
     }
@@ -301,7 +303,7 @@ class ConcentrateScreen : AppCompatActivity() {
             MyDialog(
                 dialogVisible = dialogVisible,
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .fillMaxWidth(0.8f)
                     .clip(shape = RoundedCornerShape(MyTheme.size.roundedCorner))
                     .background(color = Color.White),
                 onClose = {
@@ -564,6 +566,7 @@ class ConcentrateScreen : AppCompatActivity() {
         }
     }
 
+    @SuppressLint("Recycle", "Range", "CoroutineCreationDuringComposition")
     @RequiresApi(Build.VERSION_CODES.S)
     @Composable
     private fun CountDown(
@@ -575,6 +578,7 @@ class ConcentrateScreen : AppCompatActivity() {
             val nowBgPic by remember {
                 mutableStateOf(GetRandomPicture())
             }
+            val cour = rememberCoroutineScope()
             // 是否开始计时、倒计时
             var isCount by remember {
                 mutableStateOf(true)
@@ -597,7 +601,21 @@ class ConcentrateScreen : AppCompatActivity() {
             val vibratorManager =
                 getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
             val vibrator = vibratorManager.defaultVibrator
-
+            var customMusicUri by remember {
+                mutableStateOf<Uri?>(null)
+            }
+            val musicList = remember {
+                mutableStateListOf<Music?>(null)
+            }
+            var nowPickMusicIndex by remember {
+                mutableStateOf(-1)
+            }
+            var mediaPlayerStatus by remember {
+                mutableStateOf(MediaPlayerStatus.Wait)
+            }
+            var isLoop by remember {
+                mutableStateOf(mediaPlayer.isLooping)
+            }
 
             // 打开暂停对话框
             var dialogVisible by remember {
@@ -612,6 +630,74 @@ class ConcentrateScreen : AppCompatActivity() {
                 mutableStateOf(false)
             }
 
+            // 获取背景音乐相关信息
+            LaunchedEffect(true) {
+                var result: Array<Music> = arrayOf()
+                withContext(Dispatchers.IO) {
+                    val musicDao = MyApplication.db.MusicDao()
+                    result = musicDao.getAllMusic()
+                }
+                withContext(Dispatchers.Main) {
+                    if (result.isNotEmpty()) {
+                        musicList.addAll(result)
+                    }
+                }
+            }
+
+            // 注册文件选择器
+            val musicPicker =
+                rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
+                    if (it != null) {
+                        customMusicUri = it
+                        // 解析一下文件的名称
+                        val cursor = contentResolver.query(
+                            it,
+                            arrayOf(OpenableColumns.DISPLAY_NAME),
+                            null,
+                            null,
+                            null
+                        )
+                        if (cursor != null) {
+                            cursor.moveToFirst()
+                            val name =
+                                cursor.getString(cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME))
+                            cursor.close()
+
+                            // 把文件先存储到本地
+                            cour.launch {
+                                var result: Long = -1
+                                var music: Music? = null
+                                withContext(Dispatchers.IO) {
+                                    val folder = File(filesDir, "audio")
+                                    if (!folder.exists()) {
+                                        folder.mkdirs()
+                                    }
+                                    val file = File(folder, name)
+                                    val output = FileOutputStream(file)
+                                    contentResolver.openInputStream(it)?.copyTo(output)
+
+                                    if (file.exists()) {
+                                        // 保存到sqlite
+                                        val musicDao = MyApplication.db.MusicDao()
+                                        music = Music(
+                                            id = 0,
+                                            name = name,
+                                            uri = file.absolutePath,
+                                            is_custom = 1
+                                        )
+                                        result = musicDao.addMusic(music!!)
+                                    }
+                                }
+                                withContext(Dispatchers.Main) {
+                                    if (result > 0 && music != null) {
+                                        musicList.add(music)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
             // 计时器
             if (isCount) {
                 LaunchedEffect(isCount) {
@@ -625,7 +711,7 @@ class ConcentrateScreen : AppCompatActivity() {
             } else {
 //                    Toast.makeText(this, "计时停止", Toast.LENGTH_SHORT).show()
                 LaunchedEffect(true) {
-                    CoroutineScope( Dispatchers.IO).launch {
+                    CoroutineScope(Dispatchers.IO).launch {
                         val todoDao = MyApplication.db.todoDao()
                         todoDao.updateTodo(todo)
                     }
@@ -644,8 +730,8 @@ class ConcentrateScreen : AppCompatActivity() {
                 // 响1秒，停0.5秒，重复播放震动
                 vibrator.vibrate(
                     VibrationEffect.createWaveform(
-                        longArrayOf(0, 1000, 0, 500),
-                        intArrayOf(0, 255, 0, 255),
+                        longArrayOf(0, 1000, 0, 500, 0, 1000, 0, 500),
+                        intArrayOf(0, 255, 0, 255, 0, 255, 0, 255),
                         -1
                     )
                 )
@@ -660,32 +746,139 @@ class ConcentrateScreen : AppCompatActivity() {
             }
 
             if (showMusicChooseDialog) {
-                val musicList = remember{
-                    mutableStateListOf<Music>()
-                }
-                Dialog(onDismissRequest = {showMusicChooseDialog = false}) {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(MyTheme.elevation.contentPadding),
+                Dialog(onDismissRequest = { showMusicChooseDialog = false }) {
+                    Row(
                         modifier = Modifier
                             .clip(shape = RoundedCornerShape(MyTheme.size.roundedCorner))
+                            .heightIn(min = 0.dp, 400.dp)
                             .background(MyTheme.colors.background[0])
-                            .padding(MyTheme.elevation.sidePadding)
                     ) {
-//                        item {
-//                            TextButton(onClick = { /*TODO*/ }) {
-//                                Text(text = "音乐一")
-//                            }
-//                        }
-//                        TextButton(onClick = { /*TODO*/ }) {
-//                            Text(text = "音乐二")
-//                        }
-                        item {
-                            TextButton(onClick = {
-                                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
-                                intent.type = "audio/*"
-//                                musicPicker.launch(arrayOf("audio/*"))
-                            }) {
-                                Text(text = "自定义")
+                        // 左侧音乐列表显示
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(MyTheme.elevation.contentPadding),
+                            modifier = Modifier
+                                .padding(MyTheme.elevation.sidePadding)
+                        ) {
+                            items(musicList.size) { index ->
+                                val item = musicList[index]
+                                if (item != null) {
+                                    Row(modifier = Modifier
+                                        .clip(shape = RoundedCornerShape(MyTheme.size.roundedCorner))
+                                        .background(if (nowPickMusicIndex == index) Color.Gray.copy(alpha = 0.2f) else Color.Unspecified)) {
+                                        TextButton(onClick = {
+                                            nowPickMusicIndex = index
+                                            cour.launch {
+                                                withContext(Dispatchers.IO) {
+                                                    mediaPlayer.setDataSource(musicList[nowPickMusicIndex]?.uri)
+                                                    mediaPlayer.prepare()
+                                                }
+                                                withContext(Dispatchers.Main) {
+                                                    mediaPlayerStatus = MediaPlayerStatus.NotStart
+                                                }
+                                            }
+                                        }) {
+                                            Text(text = item.name)
+                                        }
+                                    }
+                                }
+                            }
+                            item {
+                                TextButton(onClick = {
+                                    musicPicker.launch(arrayOf("audio/*"))
+                                }) {
+                                    Text(text = "自定义")
+                                }
+                            }
+                        }
+                        // 右侧音乐控制
+                        Column(
+                            modifier = Modifier
+                                .background(MyTheme.colors.divider)
+                                .padding(MyTheme.elevation.sidePadding),
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Button(
+                                onClick = {
+                                    when (mediaPlayerStatus) {
+                                        MediaPlayerStatus.NotStart -> {
+                                            mediaPlayer.start()
+                                            if (mediaPlayer.isPlaying) {
+                                                mediaPlayerStatus = MediaPlayerStatus.Playing
+                                            }
+                                        }
+                                        MediaPlayerStatus.Pausing -> {
+                                            mediaPlayer.start()
+                                            mediaPlayerStatus = MediaPlayerStatus.Playing
+                                        }
+                                        MediaPlayerStatus.Wait -> {}
+                                        MediaPlayerStatus.Playing -> {}
+                                    }
+                                }, modifier = Modifier,
+                                enabled =
+                                mediaPlayerStatus == MediaPlayerStatus.NotStart || mediaPlayerStatus == MediaPlayerStatus.Pausing
+                            ) {
+                                Row(
+                                    modifier = Modifier,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.PlayArrow,
+                                        contentDescription = null
+                                    )
+                                    when (mediaPlayerStatus) {
+                                        MediaPlayerStatus.NotStart -> Text("播放")
+                                        MediaPlayerStatus.Pausing -> Text("继续")
+                                        MediaPlayerStatus.Playing -> Text("播放")
+                                        MediaPlayerStatus.Wait -> Text("播放")
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(MyTheme.elevation.contentPadding))
+                            Button(
+                                onClick = {
+                                    when (mediaPlayerStatus) {
+                                        MediaPlayerStatus.NotStart -> {}
+                                        MediaPlayerStatus.Pausing -> {}
+                                        MediaPlayerStatus.Wait -> {}
+                                        MediaPlayerStatus.Playing -> {
+                                            mediaPlayer.pause()
+                                            mediaPlayerStatus = MediaPlayerStatus.Pausing
+                                        }
+                                    }
+                                }, modifier = Modifier,
+                                enabled = mediaPlayerStatus == MediaPlayerStatus.Playing,
+                            ) {
+                                Row(
+                                    modifier = Modifier,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Pause,
+                                        contentDescription = null
+                                    )
+                                    Text("暂停")
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(MyTheme.elevation.contentPadding))
+                            Button(
+                                onClick = {
+                                    mediaPlayer.isLooping = !mediaPlayer.isLooping
+                                    isLoop = mediaPlayer.isLooping
+                                }, modifier = Modifier,
+                            ) {
+                                Row(
+                                    modifier = Modifier,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Loop,
+                                        contentDescription = null
+                                    )
+                                    when(isLoop) {
+                                        true -> Text("取消循环")
+                                        false -> Text("循环播放")
+                                    }
+                                }
                             }
                         }
                     }
@@ -1054,7 +1247,6 @@ class ConcentrateScreen : AppCompatActivity() {
             //震动马达
             val vibratorManager =
                 getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-            val vibrator = vibratorManager.defaultVibrator
 
             // 计时器
             if (isCount) {

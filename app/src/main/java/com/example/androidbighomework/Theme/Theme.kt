@@ -18,7 +18,8 @@ data class CustomColors(
     val component: Color,
     val background: List<Color>,
     val navBorder: Color,
-    val actionBarIcon: Color
+    val actionBarIcon: Color,
+    val divider: Color
 )
 
 @Immutable
@@ -59,7 +60,8 @@ val LocalCustomColors = staticCompositionLocalOf {
         component = Color.Unspecified,
         background = emptyList(),
         navBorder = Color.Unspecified,
-        actionBarIcon = Color.Unspecified
+        actionBarIcon = Color.Unspecified,
+        divider = Color.Unspecified
     )
 }
 val LocalCustomTypography = staticCompositionLocalOf {
@@ -114,7 +116,8 @@ fun MyTheme(content: @Composable () -> Unit) {
         component = Color(0xFFC20029),
         background = listOf(Color.White, Color(0xff4e57ff)),
         navBorder = Color(0xffEBEEF5),
-        actionBarIcon = Color.White
+        actionBarIcon = Color.White,
+        divider = Color(0xffDCDFE6)
     )
     val customElevation = CustomElevation(
         topTitlePadding = 16.dp,
