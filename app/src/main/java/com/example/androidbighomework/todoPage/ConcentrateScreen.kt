@@ -10,6 +10,8 @@ import android.os.VibrationEffect
 import android.os.VibratorManager
 import android.util.Log
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.registerForActivityResult
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
@@ -21,12 +23,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,12 +47,14 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
 import androidx.constraintlayout.compose.ConstraintLayout
 import com.example.androidbighomework.AppActivity
 import com.example.androidbighomework.MyApplication
 import com.example.androidbighomework.R
 import com.example.androidbighomework.Theme.MyTheme
+import com.example.androidbighomework.todoPage.Dao.Music
 import com.example.androidbighomework.todoPage.Dao.Todo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -124,7 +130,8 @@ class ConcentrateScreen : AppCompatActivity() {
             LaunchedEffect(true) {
                 CoroutineScope(Dispatchers.IO).launch {
                     val todoDao = MyApplication.db.todoDao()
-                    todo = todoDao.getTodoById(todoId)
+//                    todo = todoDao.getTodoById(todoId)
+                    todo = todoDao.getTheFirstTodo()
                     // 切换到主线程
                     CoroutineScope(Dispatchers.Main).launch {
                         isLoadingComplete = true
@@ -197,7 +204,7 @@ class ConcentrateScreen : AppCompatActivity() {
             val todoNameText by remember {
                 mutableStateOf(todo.todoName)
             }
-            val breakTime = 2400
+            val breakTime = todo.break_time
             //震动马达
             val vibratorManager =
                 getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
@@ -577,14 +584,6 @@ class ConcentrateScreen : AppCompatActivity() {
             var nowCountTime by remember {
                 mutableStateOf(current_Progress_init)
             }
-            // 打开暂停对话框
-            var dialogVisible by remember {
-                mutableStateOf(false)
-            }
-            // 打开暂停对话框
-            var stopDialogVisible by remember {
-                mutableStateOf(false)
-            }
             // 判断是否已经到达时间
             var hadStop by remember {
                 mutableStateOf(false)
@@ -598,6 +597,20 @@ class ConcentrateScreen : AppCompatActivity() {
             val vibratorManager =
                 getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
             val vibrator = vibratorManager.defaultVibrator
+
+
+            // 打开暂停对话框
+            var dialogVisible by remember {
+                mutableStateOf(false)
+            }
+            // 打开暂停对话框
+            var stopDialogVisible by remember {
+                mutableStateOf(false)
+            }
+            // 打开音乐选择
+            var showMusicChooseDialog by remember {
+                mutableStateOf(false)
+            }
 
             // 计时器
             if (isCount) {
@@ -644,6 +657,39 @@ class ConcentrateScreen : AppCompatActivity() {
                     }
                 }
                 changePageBreak(todo)
+            }
+
+            if (showMusicChooseDialog) {
+                val musicList = remember{
+                    mutableStateListOf<Music>()
+                }
+                Dialog(onDismissRequest = {showMusicChooseDialog = false}) {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(MyTheme.elevation.contentPadding),
+                        modifier = Modifier
+                            .clip(shape = RoundedCornerShape(MyTheme.size.roundedCorner))
+                            .background(MyTheme.colors.background[0])
+                            .padding(MyTheme.elevation.sidePadding)
+                    ) {
+//                        item {
+//                            TextButton(onClick = { /*TODO*/ }) {
+//                                Text(text = "音乐一")
+//                            }
+//                        }
+//                        TextButton(onClick = { /*TODO*/ }) {
+//                            Text(text = "音乐二")
+//                        }
+                        item {
+                            TextButton(onClick = {
+                                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
+                                intent.type = "audio/*"
+//                                musicPicker.launch(arrayOf("audio/*"))
+                            }) {
+                                Text(text = "自定义")
+                            }
+                        }
+                    }
+                }
             }
 
             // 停止弹窗
@@ -926,12 +972,14 @@ class ConcentrateScreen : AppCompatActivity() {
                             contentDescription = null
                         )
                     }
-                    IconButton(onClick = { /*TODO*/ }) {
+                    IconButton(onClick = {
+                        showMusicChooseDialog = true
+                    }) {
                         Icon(
                             modifier = Modifier.size(MyTheme.size.actionBarIcon),
                             imageVector = Icons.Default.LibraryMusic,
                             tint = MyTheme.colors.actionBarIcon,
-                            contentDescription = null
+                            contentDescription = "切换背景音乐"
                         )
                     }
                     IconButton(onClick = {
@@ -950,7 +998,7 @@ class ConcentrateScreen : AppCompatActivity() {
                             modifier = Modifier.size(MyTheme.size.actionBarIcon),
                             imageVector = Icons.Default.Refresh,
                             tint = MyTheme.colors.actionBarIcon,
-                            contentDescription = null
+                            contentDescription = "重新计时"
                         )
                     }
                     IconButton(onClick = {

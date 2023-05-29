@@ -14,6 +14,9 @@ interface TodoDao {
     @Query("select * from todos where is_complete = 0")
     fun getAllTodoNotComplete(): Array<Todo>
 
+    @Query("select * from todos limit 1")
+    fun getTheFirstTodo(): Todo
+
     @Query("select * from todos where id = :todoId")
     fun getTodoById(todoId: Long): Todo
 
