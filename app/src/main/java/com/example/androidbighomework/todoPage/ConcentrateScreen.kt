@@ -10,20 +10,22 @@ import android.os.Bundle
 import android.os.VibrationEffect
 import android.os.VibratorManager
 import android.provider.OpenableColumns
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.*
+import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -40,34 +42,30 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.zIndex
 import androidx.constraintlayout.compose.ConstraintLayout
 import com.example.androidbighomework.AppActivity
 import com.example.androidbighomework.MyApplication
-import com.example.androidbighomework.R
 import com.example.androidbighomework.Theme.MyTheme
 import com.example.androidbighomework.todoPage.Dao.Music
 import com.example.androidbighomework.todoPage.Dao.Todo
 import kotlinx.coroutines.*
 import java.io.File
 import java.io.FileOutputStream
-import kotlin.random.Random
 
 class ConcentrateScreen : ComponentActivity() {
 
     private var todoId: Long = -1
     private lateinit var context: Context
     var mediaPlayer = MediaPlayer()
+
     //震动马达
     @RequiresApi(Build.VERSION_CODES.S)
-   lateinit var vibratorManager: VibratorManager
-
-
-    enum class MediaPlayerStatus {  // Wait表示的是还未初始化完毕，NotStart表示准备好开始播放，
-        Pausing, Playing, NotStart, Wait
-    }
+    lateinit var vibratorManager: VibratorManager
 
     @SuppressLint("RestrictedApi")
     @RequiresApi(Build.VERSION_CODES.S)
@@ -79,8 +77,24 @@ class ConcentrateScreen : ComponentActivity() {
         vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
 
         setContent {
-            initCompose()
+            InitCompose()
         }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    override fun onStop() {
+        super.onStop()
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    override fun onPause() {
+        super.onPause()
+        startForegroundService(Intent(applicationContext, CounterService::class.java))
+    }
+
+    override fun onResume() {
+        super.onResume()
+        MyApplication.appStatus.value = AppStatus.Front
     }
 
     override fun onDestroy() {
@@ -91,7 +105,7 @@ class ConcentrateScreen : ComponentActivity() {
     @SuppressLint("ServiceCast")
     @RequiresApi(Build.VERSION_CODES.S)
     @Composable
-    private fun initCompose() {
+    private fun InitCompose() {
         var todo: Todo by remember {
             mutableStateOf(Todo(-1, "", 1, 1, 0, "", 0, "", "", "", 0))
         }
@@ -102,8 +116,8 @@ class ConcentrateScreen : ComponentActivity() {
         LaunchedEffect(true) {
             CoroutineScope(Dispatchers.IO).launch {
                 val todoDao = MyApplication.db.todoDao()
-//                todo = todoDao.getTodoById(todoId)
-                todo = todoDao.getTheFirstTodo()
+                todo = todoDao.getTodoById(todoId)
+//                todo = todoDao.getTheFirstTodo()
                 // 切换到主线程
                 CoroutineScope(Dispatchers.Main).launch {
                     isLoadingComplete = true
@@ -119,27 +133,46 @@ class ConcentrateScreen : ComponentActivity() {
                 // 页面切换加动画
                 Crossfade(targetState = countState) { page ->
                     when (page) {
-                        "倒计时" -> CountDown(
-                            todo = todo,
-                            changePageBreak = { newTodo ->
-                                todo = newTodo
-                                countState = "休息中"
-                            },
-                            vibratorManager = vibratorManager
-                        )
-                        "正向计时" -> ForwardTiming(
-                            context = context,
-                            todo = todo,
-                            vibratorManager = vibratorManager
-                        )
-                        "休息中" -> BreakTime(
-                            context = context,
-                            todo = todo,
-                            changePage = {
-                                countState = it
-                            },
-                            vibratorManager = vibratorManager
-                        )
+                        "倒计时" -> {
+                            LaunchedEffect(true) {
+                                if (MyApplication.todoStatus.value == ConcentrateStatus.NotBegin) {
+                                    MyApplication.countDown.value = todo.current_progress
+                                }
+                                MyApplication.todoStatus.value = ConcentrateStatus.Focusing
+                                MyApplication.totalTime = todo.total_time
+                            }
+                            CountDown(
+                                todo = todo,
+                                changePageBreak = { newTodo ->
+                                    todo = newTodo
+                                    countState = "休息中"
+                                },
+                                vibratorManager = vibratorManager
+                            )
+                        }
+                        "正向计时" -> {
+                            LaunchedEffect(true) {
+                                MyApplication.todoStatus.value = ConcentrateStatus.Focusing
+                            }
+                            ForwardTiming(
+                                context = context,
+                                todo = todo,
+                                vibratorManager = vibratorManager
+                            )
+                        }
+                        "休息中" -> {
+                            LaunchedEffect(true) {
+                                MyApplication.todoStatus.value = ConcentrateStatus.Breaking
+                            }
+                            BreakTime(
+                                context = context,
+                                todo = todo,
+                                changePage = {
+                                    countState = it
+                                },
+                                vibratorManager = vibratorManager
+                            )
+                        }
                     }
                 }
             }
@@ -163,16 +196,14 @@ class ConcentrateScreen : ComponentActivity() {
             val nowBgPic by remember {
                 mutableStateOf(GetRandomPicture())
             }
+            val appStatus = MyApplication.appStatus.collectAsState()
             val cour = rememberCoroutineScope()
             // 是否开始计时、倒计时
             var isCount by remember {
                 mutableStateOf(true)
             }
-            val current_Progress_init = todo.current_progress
             // 当前已经计时的时间
-            var nowCountTime by remember {
-                mutableStateOf(current_Progress_init)
-            }
+            var nowCountTime = MyApplication.countDown.collectAsState()
             // 判断是否已经到达时间
             var hadStop by remember {
                 mutableStateOf(false)
@@ -190,6 +221,9 @@ class ConcentrateScreen : ComponentActivity() {
                 mutableStateListOf<Music?>(null)
             }
             var nowPickMusicIndex by remember {
+                mutableStateOf(-1)
+            }
+            var nowPlayingMusicIndex by remember {
                 mutableStateOf(-1)
             }
             var mediaPlayerStatus by remember {
@@ -281,16 +315,16 @@ class ConcentrateScreen : ComponentActivity() {
                 }
 
             // 计时器
-            if (isCount) {
+            if (isCount && appStatus.value == AppStatus.Front) {
                 LaunchedEffect(isCount) {
                     repeat(totalTime) {
-                        nowCountTime++
+                        MyApplication.countDown.value++
                         // 修改todo内容的值
-                        todo.current_progress = nowCountTime
+                        todo.current_progress = nowCountTime.value
                         delay(1000)   // 延迟一秒
                     }
                 }
-            } else {
+            } else if (!isCount && appStatus.value == AppStatus.Front) {
 //                    Toast.makeText(this, "计时停止", Toast.LENGTH_SHORT).show()
                 LaunchedEffect(true) {
                     CoroutineScope(Dispatchers.IO).launch {
@@ -301,7 +335,7 @@ class ConcentrateScreen : ComponentActivity() {
             }
 
             // 时间到了
-            if (nowCountTime == totalTime && !hadStop) {
+            if (nowCountTime.value == totalTime && !hadStop) {
                 isCount = false
                 Toast.makeText(this, "时间到啦", Toast.LENGTH_SHORT).show()
                 hadStop = true
@@ -327,6 +361,7 @@ class ConcentrateScreen : ComponentActivity() {
                 changePageBreak(todo)
             }
 
+            // 打开音乐选择器
             if (showMusicChooseDialog) {
                 Dialog(onDismissRequest = { showMusicChooseDialog = false }) {
                     Row(
@@ -339,28 +374,33 @@ class ConcentrateScreen : ComponentActivity() {
                         LazyColumn(
                             verticalArrangement = Arrangement.spacedBy(MyTheme.elevation.contentPadding),
                             modifier = Modifier
-                                .widthIn()
+                                .widthIn(min = 0.dp, max = 210.dp)
                                 .padding(MyTheme.elevation.sidePadding)
                         ) {
                             items(musicList.size) { index ->
                                 val item = musicList[index]
-                                if (item != null) {
-                                    Row(modifier = Modifier
-                                        .clip(shape = RoundedCornerShape(MyTheme.size.roundedCorner))
-                                        .background(if (nowPickMusicIndex == index) Color.Gray.copy(alpha = 0.2f) else Color.Unspecified)) {
-                                        TextButton(onClick = {
-                                            nowPickMusicIndex = index
-                                            cour.launch {
-                                                withContext(Dispatchers.IO) {
-                                                    mediaPlayer.setDataSource(musicList[nowPickMusicIndex]?.uri)
-                                                    mediaPlayer.prepare()
-                                                }
-                                                withContext(Dispatchers.Main) {
-                                                    mediaPlayerStatus = MediaPlayerStatus.NotStart
+                                LazyRow {
+                                    item {
+                                        if (item != null) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .clip(shape = RoundedCornerShape(MyTheme.size.roundedCorner))
+                                                    .background(
+                                                        if (nowPickMusicIndex == index) Color.Gray.copy(
+                                                            alpha = 0.2f
+                                                        ) else Color.Unspecified
+                                                    )
+                                            ) {
+                                                TextButton(onClick = {
+                                                    nowPickMusicIndex = index
+                                                }) {
+                                                    Text(
+                                                        text = item.name,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
                                                 }
                                             }
-                                        }) {
-                                            Text(text = item.name)
                                         }
                                     }
                                 }
@@ -369,36 +409,89 @@ class ConcentrateScreen : ComponentActivity() {
                                 TextButton(onClick = {
                                     musicPicker.launch(arrayOf("audio/*"))
                                 }) {
-                                    Text(text = "自定义")
+                                    Text(text = "自定义", color = Color(0xffF56C6C))
                                 }
                             }
                         }
                         // 右侧音乐控制
                         Column(
                             modifier = Modifier
+                                .fillMaxHeight()
                                 .background(MyTheme.colors.divider)
                                 .padding(MyTheme.elevation.sidePadding),
                             verticalArrangement = Arrangement.Center
                         ) {
+                            // 播放按钮
                             Button(
                                 onClick = {
                                     when (mediaPlayerStatus) {
                                         MediaPlayerStatus.NotStart -> {
-                                            mediaPlayer.start()
-                                            if (mediaPlayer.isPlaying) {
-                                                mediaPlayerStatus = MediaPlayerStatus.Playing
+                                            cour.launch {
+                                                withContext(Dispatchers.IO) {
+                                                    mediaPlayer.setDataSource(musicList[nowPickMusicIndex]!!.uri)
+                                                    mediaPlayer.prepare()
+                                                }
+                                                withContext(Dispatchers.Main) {
+                                                    mediaPlayer.start()
+                                                    mediaPlayerStatus = MediaPlayerStatus.Playing
+                                                    nowPlayingMusicIndex = nowPickMusicIndex
+                                                }
                                             }
                                         }
                                         MediaPlayerStatus.Pausing -> {
-                                            mediaPlayer.start()
-                                            mediaPlayerStatus = MediaPlayerStatus.Playing
+                                            cour.launch {
+                                                withContext(Dispatchers.IO) {
+                                                    if (nowPlayingMusicIndex != nowPickMusicIndex) {
+                                                        mediaPlayer.reset()
+                                                        mediaPlayer.release()
+                                                        mediaPlayer = MediaPlayer()
+                                                    }
+                                                    mediaPlayer.setDataSource(musicList[nowPickMusicIndex]!!.uri)
+                                                    mediaPlayer.prepare()
+                                                }
+                                                withContext(Dispatchers.Main) {
+                                                    mediaPlayer.start()
+                                                    mediaPlayerStatus = MediaPlayerStatus.Playing
+                                                    nowPlayingMusicIndex = nowPickMusicIndex
+                                                }
+                                            }
                                         }
-                                        MediaPlayerStatus.Wait -> {}
-                                        MediaPlayerStatus.Playing -> {}
+                                        MediaPlayerStatus.Wait -> {
+                                            cour.launch {
+                                                withContext(Dispatchers.IO) {
+                                                    mediaPlayer.setDataSource(musicList[nowPickMusicIndex]!!.uri)
+                                                    mediaPlayer.prepare()
+                                                }
+                                                withContext(Dispatchers.Main) {
+                                                    mediaPlayer.start()
+                                                    mediaPlayerStatus = MediaPlayerStatus.Playing
+                                                    nowPlayingMusicIndex = nowPickMusicIndex
+                                                }
+                                            }
+                                        }
+                                        MediaPlayerStatus.Playing -> {
+                                            cour.launch {
+                                                withContext(Dispatchers.IO) {
+                                                    // 如果正在播放要释放资源重新创建一个MediaPlayer
+                                                    mediaPlayer.reset()
+                                                    mediaPlayer.release()
+                                                    mediaPlayer = MediaPlayer()
+                                                    mediaPlayer.setDataSource(musicList[nowPickMusicIndex]!!.uri)
+                                                    mediaPlayer.prepare()
+                                                }
+                                                withContext(Dispatchers.Main) {
+                                                    mediaPlayer.start()
+                                                    mediaPlayerStatus = MediaPlayerStatus.Playing
+                                                    nowPlayingMusicIndex = nowPickMusicIndex
+                                                }
+                                            }
+                                        }
                                     }
                                 }, modifier = Modifier,
                                 enabled =
-                                mediaPlayerStatus == MediaPlayerStatus.NotStart || mediaPlayerStatus == MediaPlayerStatus.Pausing
+                                mediaPlayerStatus == MediaPlayerStatus.NotStart ||
+                                        mediaPlayerStatus == MediaPlayerStatus.Pausing ||
+                                        nowPickMusicIndex != nowPlayingMusicIndex
                             ) {
                                 Row(
                                     modifier = Modifier,
@@ -408,12 +501,12 @@ class ConcentrateScreen : ComponentActivity() {
                                         imageVector = Icons.Filled.PlayArrow,
                                         contentDescription = null
                                     )
-                                    when (mediaPlayerStatus) {
-                                        MediaPlayerStatus.NotStart -> Text("播放")
-                                        MediaPlayerStatus.Pausing -> Text("继续")
-                                        MediaPlayerStatus.Playing -> Text("播放")
-                                        MediaPlayerStatus.Wait -> Text("播放")
-                                    }
+//                                    when (mediaPlayerStatus) {
+//                                        MediaPlayerStatus.NotStart -> Text("播放")
+//                                        MediaPlayerStatus.Pausing -> Text("继续")
+//                                        MediaPlayerStatus.Playing -> Text("播放")
+//                                        MediaPlayerStatus.Wait -> Text("播放")
+//                                    }
                                 }
                             }
                             Spacer(modifier = Modifier.height(MyTheme.elevation.contentPadding))
@@ -428,7 +521,8 @@ class ConcentrateScreen : ComponentActivity() {
                                             mediaPlayerStatus = MediaPlayerStatus.Pausing
                                         }
                                     }
-                                }, modifier = Modifier,
+                                },
+                                modifier = Modifier,
                                 enabled = mediaPlayerStatus == MediaPlayerStatus.Playing,
                             ) {
                                 Row(
@@ -439,7 +533,7 @@ class ConcentrateScreen : ComponentActivity() {
                                         imageVector = Icons.Filled.Pause,
                                         contentDescription = null
                                     )
-                                    Text("暂停")
+//                                    Text("暂停")
                                 }
                             }
                             Spacer(modifier = Modifier.height(MyTheme.elevation.contentPadding))
@@ -447,7 +541,8 @@ class ConcentrateScreen : ComponentActivity() {
                                 onClick = {
                                     mediaPlayer.isLooping = !mediaPlayer.isLooping
                                     isLoop = mediaPlayer.isLooping
-                                }, modifier = Modifier,
+                                },
+                                modifier = Modifier,
                             ) {
                                 Row(
                                     modifier = Modifier,
@@ -457,15 +552,54 @@ class ConcentrateScreen : ComponentActivity() {
                                         imageVector = Icons.Filled.Loop,
                                         contentDescription = null
                                     )
-                                    when(isLoop) {
-                                        true -> Text("取消循环")
-                                        false -> Text("循环播放")
-                                    }
+//                                    when (isLoop) {
+//                                        true -> Text("取消循环")
+//                                        false -> Text("循环播放")
+//                                    }
                                 }
                             }
                         }
                     }
                 }
+            }
+
+            var resetTime by remember {
+                mutableStateOf(false)
+            }
+
+            // 重置进度弹窗
+            if (resetTime) {
+                AlertDialog(
+                    onDismissRequest = {
+                        resetTime = false
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            cour.launch {
+                                withContext(Dispatchers.IO) {
+                                    todo.current_progress = 0
+                                    MyApplication.db.todoDao().updateTodo(todo)
+                                }
+                                withContext(Dispatchers.Main) {
+                                    MyApplication.countDown.value = 0
+                                    resetTime = false
+                                }
+                            }
+                        }) {
+                            Text("确认", color = Color(0xff409EFF))
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            resetTime = false
+                        }) {
+                            Text("取消", color = Color(0xffF56C6C))
+                        }
+                    },
+                    title = { Text(text = "时间重置", color = Color(0xffF56C6C)) },
+                    text = { Text(text = "确认重置当前待办的进度?") },
+                    modifier = Modifier.clip(shape = RoundedCornerShape(MyTheme.size.roundedCorner))
+                )
             }
 
             // 停止弹窗
@@ -487,12 +621,17 @@ class ConcentrateScreen : ComponentActivity() {
                     )
                 },
                 content = {
-                    Column(modifier = Modifier.width(200.dp)) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                    ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    Log.d("test", "was cick")
+                                    val intent = Intent(context, AppActivity::class.java)
+                                    startActivity(intent)
+                                    finish()
                                 }
                                 .padding(top = 20.dp, bottom = 20.dp, start = 20.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -505,17 +644,32 @@ class ConcentrateScreen : ComponentActivity() {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { }
+                                .clickable {
+                                    cour.launch {
+                                        withContext(Dispatchers.IO) {
+                                            todo.is_complete = 1
+                                            // 提前完成计时
+                                            MyApplication.db
+                                                .todoDao()
+                                                .updateTodo(todo)
+                                        }
+                                        withContext(Dispatchers.Main) {
+                                            val intent = Intent(context, AppActivity::class.java)
+                                            startActivity(intent)
+                                            finish()
+                                        }
+                                    }
+                                }
                                 .padding(top = 20.dp, bottom = 20.dp, start = 20.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("提取完成计时", style = MyTheme.typography.regularText)
+                            Text("提前完成计时", style = MyTheme.typography.regularText)
                         }
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-
+                                    stopDialogVisible = false
                                 }
                                 .padding(top = 20.dp, bottom = 20.dp, start = 20.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -559,6 +713,7 @@ class ConcentrateScreen : ComponentActivity() {
                     )
             ) {
                 val (
+                    musicLabel,
                     progressBar,
                     todoStatusText,
                     todoName,
@@ -567,8 +722,8 @@ class ConcentrateScreen : ComponentActivity() {
                     controlBar) = createRefs()
 
 
-                val current_progress = remember(nowCountTime) {
-                    derivedStateOf { (totalTime - nowCountTime) / totalTime.toFloat() }
+                val current_progress = remember(nowCountTime.value) {
+                    derivedStateOf { (totalTime - nowCountTime.value) / totalTime.toFloat() }
                 }
                 val initialProgressBarSize = with(LocalDensity.current) {
                     200.dp.toPx()
@@ -578,7 +733,7 @@ class ConcentrateScreen : ComponentActivity() {
                 val transition = rememberInfiniteTransition()
                 val progressSize = transition.animateFloat(
                     initialValue = initialProgressBarSize,
-                    targetValue = initialProgressBarSize + 30f,
+                    targetValue = initialProgressBarSize + 60f,
                     animationSpec = infiniteRepeatable(
                         animation = tween(durationMillis = 1500),
                         repeatMode = RepeatMode.Restart
@@ -592,9 +747,56 @@ class ConcentrateScreen : ComponentActivity() {
                         repeatMode = RepeatMode.Restart
                     )
                 )
+                val progressAlpha2 = transition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 0.4f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(durationMillis = 1500),
+                        repeatMode = RepeatMode.Restart
+                    )
+                )
                 val strokeSize = with(LocalDensity.current) {
                     4.dp.toPx()
                 }
+
+                // 音乐名称显示
+
+                AnimatedVisibility(
+                    modifier = Modifier
+                        .constrainAs(musicLabel) {
+                            centerHorizontallyTo(parent)
+                            top.linkTo(topActionBar.bottom, margin = 10.dp)
+                        }
+                        .zIndex(2f),
+                    visible = mediaPlayerStatus == MediaPlayerStatus.Playing,
+                    enter = fadeIn()
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .constrainAs(musicLabel) {
+                                top.linkTo(topActionBar.bottom, margin = 10.dp)
+                                centerHorizontallyTo(parent)
+                            }
+                            .zIndex(2f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.MusicNote,
+                            contentDescription = null,
+                            tint = Color.White
+                        )
+                        musicList[nowPlayingMusicIndex]?.let {
+                            Text(
+                                text = it.name,
+                                style = MyTheme.typography.todoListTitle.copy(
+                                    shadow = MyTheme.shadow.toDoListText,
+                                    fontSize = 14.sp
+                                )
+                            )
+                        }
+                    }
+                }
+
 
                 // 加一点遮罩背景
                 Box(
@@ -607,7 +809,6 @@ class ConcentrateScreen : ComponentActivity() {
                 Canvas(modifier = Modifier.constrainAs(progressBar) {
                     centerTo(parent)
                 }) {
-
                     // 底部圈
                     drawArc(
                         color = Color.White,
@@ -621,6 +822,23 @@ class ConcentrateScreen : ComponentActivity() {
                         ),
                         style = Stroke(width = strokeSize),
                         alpha = progressAlpha.value
+                    )
+                    // 白色色进度条
+                    drawArc(
+                        color = Color.White,
+                        startAngle = -90f,
+                        sweepAngle = 360f,
+                        useCenter = false,
+                        size = Size(
+                            width = initialProgressBarSize,
+                            height = initialProgressBarSize
+                        ),
+                        topLeft = Offset(
+                            x = -(initialProgressBarSize / 2),
+                            y = -(initialProgressBarSize / 2)
+                        ),
+                        style = Stroke(width = strokeSize),
+                        alpha = progressAlpha2.value
                     )
                     // 白色色进度条
                     drawArc(
@@ -651,7 +869,6 @@ class ConcentrateScreen : ComponentActivity() {
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     IconButton(onClick = {
-                        Log.d("test", "hello world")
                         val intent = Intent(context, AppActivity::class.java)
                         startActivity(intent)
                         finish()
@@ -692,7 +909,7 @@ class ConcentrateScreen : ComponentActivity() {
                 }
                 // 显示当前时长
                 Text(
-                    text = getCurrentTime(totalTime - nowCountTime),
+                    text = getCurrentTime(totalTime - nowCountTime.value),
                     modifier = Modifier
                         .constrainAs(countTimeText) {
                             centerTo(parent)
@@ -769,7 +986,9 @@ class ConcentrateScreen : ComponentActivity() {
                             contentDescription = "暂停计时"
                         )
                     }
-                    IconButton(onClick = { /*TODO*/ }) {
+                    IconButton(onClick = {
+                        resetTime = true
+                    }) {
                         Icon(
                             modifier = Modifier.size(MyTheme.size.actionBarIcon),
                             imageVector = Icons.Default.Refresh,
@@ -792,7 +1011,4 @@ class ConcentrateScreen : ComponentActivity() {
             }
         }
     }
-
-
-
 }

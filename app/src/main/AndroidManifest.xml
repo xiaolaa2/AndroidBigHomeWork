@@ -3,7 +3,9 @@
         xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.VIBRATE" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
 
     <application
             android:name=".MyApplication"
@@ -15,6 +17,11 @@
             android:supportsRtl="true"
             android:theme="@style/Theme.AndroidBigHomeWork"
             tools:targetApi="31">
+        <service
+                android:name=".todoPage.CounterService"
+                android:enabled="true"
+                android:exported="true" />
+
         <activity
                 android:name=".todoPage.ConcentrateScreen"
                 android:exported="true" />

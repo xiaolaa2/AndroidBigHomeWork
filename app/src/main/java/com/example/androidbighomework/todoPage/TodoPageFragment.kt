@@ -66,6 +66,12 @@ class TodoPageFragment : Fragment() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        // 设置一下状态以便service的开启和关闭
+        MyApplication.todoStatus.value = ConcentrateStatus.NotBegin
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
