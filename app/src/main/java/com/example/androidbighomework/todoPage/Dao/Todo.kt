@@ -16,5 +16,6 @@ data class Todo(
     @ColumnInfo(name = "todo_notes") var todo_notes: String,  // 备注
     @ColumnInfo(name = "todo_type") var todo_type: String,  // todo的类型
     @ColumnInfo(name = "repeat_time") var repeat_time: String,  // 重复时间
-    @ColumnInfo(name = "is_complete", defaultValue = 0.toString()) var is_complete: Int
+    @ColumnInfo(name = "is_complete", defaultValue = 0.toString()) var is_complete: Int,
+    @ColumnInfo(name = "background_image") var background_image: Int
 )

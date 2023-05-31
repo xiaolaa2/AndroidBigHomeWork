@@ -12,8 +12,11 @@ import android.os.IBinder
 import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStoreOwner
 import com.example.androidbighomework.MyApplication
 import com.example.androidbighomework.R
+import com.example.androidbighomework.ViewModel.ConcentrateScreenViewModel
 import kotlinx.coroutines.*
 
 class CounterService : Service() {

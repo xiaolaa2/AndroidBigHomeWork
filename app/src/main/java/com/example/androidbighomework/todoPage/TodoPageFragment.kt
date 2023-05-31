@@ -34,9 +34,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.constraintlayout.compose.ConstraintLayout
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.androidbighomework.MyApplication
 import com.example.androidbighomework.R
 import com.example.androidbighomework.Theme.MyTheme
+import com.example.androidbighomework.ViewModel.TodoPageViewModel
 import com.example.androidbighomework.todoPage.Dao.Todo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -105,18 +107,17 @@ class TodoPageFragment : Fragment() {
         requireView().findViewById<ComposeView>(R.id.compose_view).setContent {
             // 顶部的大背景
             MyTheme {
-                ConstraintLayout() {
+                ConstraintLayout {
                     val (button, mainContent) = createRefs()
                     val coroutineScope = rememberCoroutineScope()
+                    val viewModel: TodoPageViewModel = viewModel()
 
                     // 待办列表获取
-                    val todoList = remember {
-                        mutableStateListOf<Todo>()
-                    }
+                    val todoList = viewModel.todoList.collectAsState()
 
                     // 用户当前选中的todo
                     var nowPickTodo by remember {
-                        mutableStateOf(Todo(-1, "", 1, 1, 0, "", 0, "", "", "", 0))
+                        mutableStateOf(Todo(-1, "", 1, 1, 0, "", 0, "", "", "", 0, 0))
                     }
                     var nowPickTodoIndex by remember {
                         mutableStateOf(-1)
@@ -141,14 +142,6 @@ class TodoPageFragment : Fragment() {
                         mutableStateOf(false)
                     }
 
-                    LaunchedEffect(key1 = Unit) {
-                        CoroutineScope(Dispatchers.IO).launch {
-                            val todoDao = MyApplication.db.todoDao()
-                            val todoData = todoDao.getAllTodo()
-                            todoList.addAll(todoData)
-                        }
-                    }
-
                     if (confirmTodoDeleteDialog) {
                         AlertDialog(
                             onDismissRequest = {
@@ -160,12 +153,12 @@ class TodoPageFragment : Fragment() {
                                     CoroutineScope(Dispatchers.IO).launch {
                                         // 删除todo
                                         val todoDao = MyApplication.db.todoDao()
-                                        val result = todoDao.deleteTodo(todoList[nowPickTodoIndex])
-                                        Log.d("todo", todoList[nowPickTodoIndex].todoName)
+                                        val result = todoDao.deleteTodo(todoList.value[nowPickTodoIndex])
+                                        Log.d("todo", todoList.value[nowPickTodoIndex].todoName)
                                         // 移除ui显示中的todo
                                         CoroutineScope(Dispatchers.Main).launch {
                                             if (result > 0) {
-                                                todoList.removeAt(nowPickTodoIndex)
+                                                viewModel.removeTodoByIndex(nowPickTodoIndex)
                                                 Toast.makeText(
                                                     context,
                                                     "待办删除成功",
@@ -234,7 +227,7 @@ class TodoPageFragment : Fragment() {
                                 // 数据库提交一个todo
                                 CoroutineScope(Dispatchers.IO).launch {
                                     val todoDao = MyApplication.db.todoDao()
-                                    val item = todoList[nowPickTodoIndex]
+                                    val item = todoList.value[nowPickTodoIndex]
                                     item.todoName = addTodoText
                                     item.total_time = when (totalTimeIndex) {
                                         0 -> 25 * 60
@@ -248,7 +241,7 @@ class TodoPageFragment : Fragment() {
                                     if (result > 0) {
                                         // TODO: 日后研究研究协程
                                         CoroutineScope(Dispatchers.Main).launch {// 这里需不需要去掉
-                                            todoList[nowPickTodoIndex] = item
+                                            viewModel.updateTodoByIndex(nowPickTodoIndex, item)
                                             showTodoEditDialog2 = false
                                             Toast.makeText(
                                                     context,
@@ -468,14 +461,15 @@ class TodoPageFragment : Fragment() {
                                         todo_notes = "",
                                         todo_type = todoTypeList[todoTypeIndex],
                                         repeat_time = "",
-                                        is_complete = 0
+                                        is_complete = 0,
+                                        background_image = GetRandomPicture()
                                     )
                                     val result = todoDao.insertTodo(item)
                                     item.id = result
                                     if (result > 0) {
                                         // TODO: 日后研究研究协程
                                         CoroutineScope(Dispatchers.Main).launch {// 这里需不需要去掉
-                                            todoList.add(item)
+                                            viewModel.addTodo(item)
                                             dialogVisiable = false
                                         }
                                     }
@@ -708,8 +702,8 @@ class TodoPageFragment : Fragment() {
                                 verticalArrangement = Arrangement.spacedBy(MyTheme.elevation.contentPadding)
                             ) {
                                 // TODO: Drow down 阴影不会搞
-                                items(todoList.size) { index ->
-                                    val item = todoList[index]
+                                items(todoList.value.size) { index ->
+                                    val item = todoList.value[index]
                                     AnimatedVisibility(
                                         visibleState = state,
                                         enter = fadeIn(animationSpec = tween(durationMillis = 850))
@@ -722,7 +716,7 @@ class TodoPageFragment : Fragment() {
                                                     shape = RoundedCornerShape(MyTheme.size.roundedCorner),
                                                 )
                                                 .paint(
-                                                    painter = painterResource(id = GetRandomPicture()),
+                                                    painter = painterResource(id = item.background_image),
                                                     contentScale = ContentScale.Crop,
                                                     alignment = Alignment.TopCenter
                                                 )

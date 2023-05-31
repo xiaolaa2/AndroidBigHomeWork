@@ -48,9 +48,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
 import androidx.constraintlayout.compose.ConstraintLayout
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.androidbighomework.AppActivity
 import com.example.androidbighomework.MyApplication
 import com.example.androidbighomework.Theme.MyTheme
+import com.example.androidbighomework.ViewModel.ConcentrateScreenViewModel
 import com.example.androidbighomework.todoPage.Dao.Music
 import com.example.androidbighomework.todoPage.Dao.Todo
 import kotlinx.coroutines.*
@@ -107,11 +109,12 @@ class ConcentrateScreen : ComponentActivity() {
     @Composable
     private fun InitCompose() {
         var todo: Todo by remember {
-            mutableStateOf(Todo(-1, "", 1, 1, 0, "", 0, "", "", "", 0))
+            mutableStateOf(Todo(-1, "", 1, 1, 0, "", 0, "", "", "", 0, 0))
         }
         var isLoadingComplete by remember {
             mutableStateOf(false)
         }
+        val viewModel: ConcentrateScreenViewModel = viewModel()
         // 要使用协程来获取数据
         LaunchedEffect(true) {
             CoroutineScope(Dispatchers.IO).launch {
@@ -147,7 +150,8 @@ class ConcentrateScreen : ComponentActivity() {
                                     todo = newTodo
                                     countState = "休息中"
                                 },
-                                vibratorManager = vibratorManager
+                                vibratorManager = vibratorManager,
+                                viewModel = viewModel
                             )
                         }
                         "正向计时" -> {
@@ -189,7 +193,8 @@ class ConcentrateScreen : ComponentActivity() {
     private fun CountDown(
         todo: Todo,
         changePageBreak: (newTodo: Todo) -> Unit,
-        vibratorManager: VibratorManager
+        vibratorManager: VibratorManager,
+        viewModel: ConcentrateScreenViewModel
     ) {
         MyTheme {
             // 当前的背景图片
@@ -203,7 +208,7 @@ class ConcentrateScreen : ComponentActivity() {
                 mutableStateOf(true)
             }
             // 当前已经计时的时间
-            var nowCountTime = MyApplication.countDown.collectAsState()
+            val nowCountTime = MyApplication.countDown.collectAsState()
             // 判断是否已经到达时间
             var hadStop by remember {
                 mutableStateOf(false)
@@ -220,15 +225,9 @@ class ConcentrateScreen : ComponentActivity() {
             val musicList = remember {
                 mutableStateListOf<Music?>(null)
             }
-            var nowPickMusicIndex by remember {
-                mutableStateOf(-1)
-            }
-            var nowPlayingMusicIndex by remember {
-                mutableStateOf(-1)
-            }
-            var mediaPlayerStatus by remember {
-                mutableStateOf(MediaPlayerStatus.Wait)
-            }
+            val nowPickMusicIndex by viewModel.nowPickMusicIndex.collectAsState()
+            val nowPlayingMusicIndex by viewModel.nowPlayingMusicIndex.collectAsState()
+            val mediaPlayerStatus by viewModel.mediaPlayerStatus.collectAsState()
             var isLoop by remember {
                 mutableStateOf(mediaPlayer.isLooping)
             }
@@ -392,7 +391,7 @@ class ConcentrateScreen : ComponentActivity() {
                                                     )
                                             ) {
                                                 TextButton(onClick = {
-                                                    nowPickMusicIndex = index
+                                                    viewModel.nowPickMusicIndex.value = index
                                                 }) {
                                                     Text(
                                                         text = item.name,
@@ -433,8 +432,8 @@ class ConcentrateScreen : ComponentActivity() {
                                                 }
                                                 withContext(Dispatchers.Main) {
                                                     mediaPlayer.start()
-                                                    mediaPlayerStatus = MediaPlayerStatus.Playing
-                                                    nowPlayingMusicIndex = nowPickMusicIndex
+                                                    viewModel.mediaPlayerStatus.value = MediaPlayerStatus.Playing
+                                                    viewModel.nowPlayingMusicIndex.value = nowPickMusicIndex
                                                 }
                                             }
                                         }
@@ -445,14 +444,14 @@ class ConcentrateScreen : ComponentActivity() {
                                                         mediaPlayer.reset()
                                                         mediaPlayer.release()
                                                         mediaPlayer = MediaPlayer()
+                                                        mediaPlayer.setDataSource(musicList[nowPickMusicIndex]!!.uri)
+                                                        mediaPlayer.prepare()
                                                     }
-                                                    mediaPlayer.setDataSource(musicList[nowPickMusicIndex]!!.uri)
-                                                    mediaPlayer.prepare()
                                                 }
                                                 withContext(Dispatchers.Main) {
                                                     mediaPlayer.start()
-                                                    mediaPlayerStatus = MediaPlayerStatus.Playing
-                                                    nowPlayingMusicIndex = nowPickMusicIndex
+                                                    viewModel.mediaPlayerStatus.value = MediaPlayerStatus.Playing
+                                                    viewModel.nowPlayingMusicIndex.value = nowPickMusicIndex
                                                 }
                                             }
                                         }
@@ -464,8 +463,8 @@ class ConcentrateScreen : ComponentActivity() {
                                                 }
                                                 withContext(Dispatchers.Main) {
                                                     mediaPlayer.start()
-                                                    mediaPlayerStatus = MediaPlayerStatus.Playing
-                                                    nowPlayingMusicIndex = nowPickMusicIndex
+                                                    viewModel.mediaPlayerStatus.value = MediaPlayerStatus.Playing
+                                                    viewModel.nowPlayingMusicIndex.value = nowPickMusicIndex
                                                 }
                                             }
                                         }
@@ -481,8 +480,8 @@ class ConcentrateScreen : ComponentActivity() {
                                                 }
                                                 withContext(Dispatchers.Main) {
                                                     mediaPlayer.start()
-                                                    mediaPlayerStatus = MediaPlayerStatus.Playing
-                                                    nowPlayingMusicIndex = nowPickMusicIndex
+                                                    viewModel.mediaPlayerStatus.value = MediaPlayerStatus.Playing
+                                                    viewModel.nowPlayingMusicIndex.value = nowPickMusicIndex
                                                 }
                                             }
                                         }
@@ -501,12 +500,6 @@ class ConcentrateScreen : ComponentActivity() {
                                         imageVector = Icons.Filled.PlayArrow,
                                         contentDescription = null
                                     )
-//                                    when (mediaPlayerStatus) {
-//                                        MediaPlayerStatus.NotStart -> Text("播放")
-//                                        MediaPlayerStatus.Pausing -> Text("继续")
-//                                        MediaPlayerStatus.Playing -> Text("播放")
-//                                        MediaPlayerStatus.Wait -> Text("播放")
-//                                    }
                                 }
                             }
                             Spacer(modifier = Modifier.height(MyTheme.elevation.contentPadding))
@@ -518,7 +511,7 @@ class ConcentrateScreen : ComponentActivity() {
                                         MediaPlayerStatus.Wait -> {}
                                         MediaPlayerStatus.Playing -> {
                                             mediaPlayer.pause()
-                                            mediaPlayerStatus = MediaPlayerStatus.Pausing
+                                            viewModel.mediaPlayerStatus.value = MediaPlayerStatus.Pausing
                                         }
                                     }
                                 },
@@ -533,7 +526,6 @@ class ConcentrateScreen : ComponentActivity() {
                                         imageVector = Icons.Filled.Pause,
                                         contentDescription = null
                                     )
-//                                    Text("暂停")
                                 }
                             }
                             Spacer(modifier = Modifier.height(MyTheme.elevation.contentPadding))
@@ -552,10 +544,6 @@ class ConcentrateScreen : ComponentActivity() {
                                         imageVector = Icons.Filled.Loop,
                                         contentDescription = null
                                     )
-//                                    when (isLoop) {
-//                                        true -> Text("取消循环")
-//                                        false -> Text("循环播放")
-//                                    }
                                 }
                             }
                         }

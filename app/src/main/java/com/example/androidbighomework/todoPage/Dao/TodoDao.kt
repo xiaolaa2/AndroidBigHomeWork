@@ -9,7 +9,7 @@ interface TodoDao {
      * 获取所有的todo待办
      */
     @Query("select * from todos")
-    fun getAllTodo(): Array<Todo>
+    fun getAllTodo(): List<Todo>
 
     @Query("select * from todos where is_complete = 0")
     fun getAllTodoNotComplete(): Array<Todo>
