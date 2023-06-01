@@ -15,6 +15,15 @@ import kotlinx.coroutines.launch
 class TodoPageViewModel : ViewModel() {
     val todoList = MutableStateFlow<MutableList<Todo>>(mutableListOf())
 
+    init {
+        CoroutineScope(Dispatchers.IO).launch {
+            // 初始化的时候获取所有的todoList
+            getAllTodoList.collect{
+                todoList.value.addAll(it)
+            }
+        }
+    }
+
     private val getAllTodoList = flow<List<Todo>> {
         // 访问db获取所有todo实例
         val db = MyApplication.db.todoDao()
@@ -33,12 +42,4 @@ class TodoPageViewModel : ViewModel() {
         todoList.value.removeAt(index)
     }
 
-    init {
-        CoroutineScope(Dispatchers.IO).launch {
-            // 初始化的时候获取所有的todoList
-            getAllTodoList.collect{
-                todoList.value.addAll(it)
-            }
-        }
-    }
 }

@@ -589,8 +589,6 @@ class TodoPageFragment : Fragment() {
                         }
                     }
 
-
-
                     Column(
                         modifier = Modifier
                             .constrainAs(mainContent) {
@@ -839,7 +837,7 @@ class TodoPageFragment : Fragment() {
                                 }
                             }
                         }
-                        Divider(thickness = 2.dp, color = MyTheme.colors.navBorder)
+//                        Divider(thickness = 2.dp, color = MyTheme.colors.navBorder)
                     }
                 }
             }

@@ -5,6 +5,8 @@ import androidx.room.Room
 import com.example.androidbighomework.todoPage.AppDatabase
 import com.example.androidbighomework.todoPage.AppStatus
 import com.example.androidbighomework.todoPage.ConcentrateStatus
+import com.example.androidbighomework.todoPage.Dao.Todo
+import com.example.androidbighomework.todoPage.PageType
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class MyApplication : Application(){
@@ -22,8 +24,11 @@ class MyApplication : Application(){
         lateinit var db: AppDatabase
         // 倒计时全局变量
         var countDown = MutableStateFlow<Int>(0)
+        var BreakcountDown = MutableStateFlow<Int>(0)
+        var page = MutableStateFlow<PageType>(PageType.CountDown)
         var totalTime = 0
         var todoStatus = MutableStateFlow(ConcentrateStatus.NotBegin)
         var appStatus = MutableStateFlow<AppStatus>(AppStatus.Front)
+        var todo = MutableStateFlow<Todo>(Todo(-1, "", 1, 1, 0, "", 0, "", "", "", 0, 0))
     }
 }

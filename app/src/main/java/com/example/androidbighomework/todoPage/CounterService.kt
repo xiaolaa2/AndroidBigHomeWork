@@ -12,11 +12,8 @@ import android.os.IBinder
 import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.ViewModelStoreOwner
 import com.example.androidbighomework.MyApplication
 import com.example.androidbighomework.R
-import com.example.androidbighomework.ViewModel.ConcentrateScreenViewModel
 import kotlinx.coroutines.*
 
 class CounterService : Service() {
@@ -41,7 +38,12 @@ class CounterService : Service() {
 
         @SuppressLint("UnspecifiedImmutableFlag")
         val pendingIntent: PendingIntent =
-            PendingIntent.getActivity(this, 0, Intent(this, ConcentrateScreen::class.java), PendingIntent.FLAG_IMMUTABLE)
+            PendingIntent.getActivity(
+                this,
+                0,
+                Intent(this, ConcentrateScreen::class.java),
+                PendingIntent.FLAG_IMMUTABLE
+            )
         MyApplication.appStatus.value = AppStatus.Background
         notificationManager.createNotificationChannel(notificationChannel)
         val notification = NotificationCompat.Builder(applicationContext, "CountDownService")
@@ -84,7 +86,12 @@ class CounterService : Service() {
 
         @SuppressLint("UnspecifiedImmutableFlag")
         val pendingIntent: PendingIntent =
-            PendingIntent.getActivity(this, 0, Intent(this, ConcentrateScreen::class.java), PendingIntent.FLAG_IMMUTABLE)
+            PendingIntent.getActivity(
+                this,
+                0,
+                Intent(this, ConcentrateScreen::class.java),
+                PendingIntent.FLAG_IMMUTABLE
+            )
         CoroutineScope(Dispatchers.Main).launch {
             // 如果app返回，就停止这个Service
             MyApplication.appStatus.collect {
@@ -94,9 +101,25 @@ class CounterService : Service() {
             }
         }
         coroutineScope.launch {
-            while (MyApplication.countDown.value <= MyApplication.totalTime) {
-                MyApplication.countDown.value++
-                delay(1000)
+            when (MyApplication.page.value) {
+                PageType.CountDown -> {
+                    while (MyApplication.countDown.value <= MyApplication.totalTime) {
+                        MyApplication.countDown.value++
+                        delay(1000)
+                    }
+                }
+                PageType.Break -> {
+                    while (MyApplication.BreakcountDown.value <= MyApplication.todo.value.break_time) {
+                        MyApplication.BreakcountDown.value++
+                        delay(1000)
+                    }
+                }
+                PageType.ForwardTiming -> {
+                    while (MyApplication.countDown.value <= MyApplication.totalTime) {
+                        MyApplication.countDown.value++
+                        delay(1000)
+                    }
+                }
             }
             if (MyApplication.countDown.value >= MyApplication.totalTime) {
                 val notification =

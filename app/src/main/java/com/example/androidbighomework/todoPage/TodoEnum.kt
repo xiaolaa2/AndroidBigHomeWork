@@ -4,6 +4,10 @@ enum class ConcentrateStatus {   // 专注中和休息中以及还没有开始�
     Focusing, Breaking, NotBegin
 }
 
+enum class PageType {
+    Break, CountDown, ForwardTiming
+}
+
 enum class MediaPlayerStatus {  // Wait表示的是还未初始化完毕，NotStart表示准备好开始播放，
     Pausing, Playing, NotStart, Wait
 }
